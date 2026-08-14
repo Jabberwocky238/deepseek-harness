@@ -86,6 +86,10 @@ const PYTHON_METADATA: Record<string, { license: string; repo: string; role: str
   pydantic: { license: 'MIT', repo: 'https://github.com/pydantic/pydantic', role: 'runtime dependency of `deepseek-harness-sdk`' },
   hatchling: { license: 'MIT', repo: 'https://github.com/pypa/hatch', role: 'build backend' },
   pytest: { license: 'MIT', repo: 'https://github.com/pytest-dev/pytest', role: 'test-only' },
+  'pytest-asyncio': { license: 'Apache-2.0', repo: 'https://github.com/pytest-dev/pytest-asyncio', role: 'test-only' },
+  aiohttp: { license: 'Apache-2.0', repo: 'https://github.com/aio-libs/aiohttp', role: 'runtime dependency of `deepseek-harness-wecom`' },
+  httpx: { license: 'BSD-3-Clause', repo: 'https://github.com/encode/httpx', role: 'runtime dependency of `deepseek-harness-wecom`' },
+  cryptography: { license: 'Apache-2.0 OR BSD-3-Clause', repo: 'https://github.com/pyca/cryptography', role: 'runtime dependency of `deepseek-harness-wecom`' },
 }
 
 type PythonMetadata = typeof PYTHON_METADATA

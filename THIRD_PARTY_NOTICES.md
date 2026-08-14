@@ -176,9 +176,13 @@ Direct dependencies of the `pyproject.toml` manifests, plus `uv` as the developm
 
 | Package | License | Role |
 | --- | --- | --- |
+| [`aiohttp`](https://github.com/aio-libs/aiohttp) | Apache-2.0 | runtime dependency of `deepseek-harness-wecom` |
+| [`cryptography`](https://github.com/pyca/cryptography) | Apache-2.0 OR BSD-3-Clause | runtime dependency of `deepseek-harness-wecom` |
 | [`hatchling`](https://github.com/pypa/hatch) | MIT | build backend |
+| [`httpx`](https://github.com/encode/httpx) | BSD-3-Clause | runtime dependency of `deepseek-harness-wecom` |
 | [`pydantic`](https://github.com/pydantic/pydantic) | MIT | runtime dependency of `deepseek-harness-sdk` |
 | [`pytest`](https://github.com/pytest-dev/pytest) | MIT | test-only |
+| [`pytest-asyncio`](https://github.com/pytest-dev/pytest-asyncio) | Apache-2.0 | test-only |
 | [`uv`](https://github.com/astral-sh/uv) | MIT / Apache-2.0 | development workflow tool |
 
 ## Fetched at build time

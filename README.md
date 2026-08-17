@@ -1,57 +1,75 @@
-# DeepSeek Harness
+# Cordis Template
 
-English | [中文](README.zh.md)
+A minimal [Cordis](https://github.com/cordiverse/cordis) application: the framework core plus the loader stack, with every plugin removed.
 
-DeepSeek Harness (`dsh`) is an open-source agent harness developed by [DeepSeek AI](https://deepseek.com).
+Cordis is a plugin framework built around context, effects, and fiber lifecycle. A plugin is a module exporting `apply(ctx)`; everything it registers through `ctx` is released when the plugin unloads.
 
-It uses an architecture where **everything is a plugin**, and is powered by [Cordis](https://github.com/cordiverse/cordis), whose design is described in [_A Programming Paradigm for Spatiotemporal Composability_](https://github.com/cordiverse/paper).
+## Layout
 
-## Developer preview
-
-DeepSeek Harness is currently in _developer preview_ and is iterating rapidly. **THERE WILL BE COMPATIBILITY-BREAKING CHANGES.**
-
-## Run
-
-### Run from `npm`
-
-Install `Node.js`, then run:
-
-```sh
-npx @deepseek-ai/dsh web
+```
+vendor/           pinned framework source
+  cordis/           context, fiber, events, registry, service, logger
+  cosmokit/         shared utilities
+  schemastery/      config schema and validation
+  loader/           plugin tree from configuration
+  include/          config-file includes and patch overlays
+  group/            nested plugin groups
+  timer/            disposal-aware timers
+  hmr/              hot module replacement
+  logger-console/   console exporter
+src/hello.ts      example plugin
+cordis.yml        application composition
 ```
 
-The command starts the Web UI, served at `http://127.0.0.1:3080` by default. See [Web UI guide](docs/user/guide/index.md).
-
-### Run from source
-
-To run from a repository checkout:
+## Usage
 
 ```sh
-git clone https://github.com/deepseek-ai/deepseek-harness.git
-cd deepseek-harness
 pnpm install
-pnpm run build
-pnpm dsh web
+pnpm start
 ```
 
-## Community and support
+Expected output — the example plugin logs once per second, and HMR watches `src/`:
 
-- Feel free to submit feedback or bug reports through [GitHub Discussions](https://github.com/deepseek-ai/deepseek-harness/discussions).
-- Add the [`dsh-plugin`](https://github.com/topics/dsh-plugin) topic to your plugin repository for discoverability.
-- Join <a href="https://discord.gg/Ycq5dCaS4">DeepSeek Harness Discord community</a>.
+```
+2026-08-17 12:46:12 [I] hmr watching [ './src' ]
+2026-08-17 12:46:13 [I] hello tick
+```
 
-## Contributing
+Edit `src/hello.ts` while it runs; the plugin reloads in place. The tick stays at one per second because unloading the old instance ran the effect's cleanup.
 
-See [CONTRIBUTING.md](CONTRIBUTING.md).
+`pnpm build` typechecks and emits declarations for the vendored sources.
 
-## Development
+## Writing a plugin
 
-Start with the [development guide](docs/development.md) and [architecture documentation](docs/architecture.md).
+```ts
+import type { Context } from '@deepseek-ai/cordis'
 
-For agents, follow [AGENTS.md](AGENTS.md).
+export const name = 'my-plugin'
+export const inject = ['timer']
+
+export function apply(ctx: Context) {
+  ctx.effect(() => {
+    const handle = setInterval(() => ctx.logger('my-plugin').info('working'), 1000)
+    return () => clearInterval(handle)
+  })
+}
+```
+
+Register it in `cordis.yml`:
+
+```yaml
+- id: my-plugin
+  name: './src/my-plugin.ts'
+```
+
+`inject` names the services that must exist before `apply` runs. A plugin whose injected service has no provider stays PENDING and logs nothing — that is a legitimate state, not an error.
+
+Every registration goes through `ctx.effect()` or `ctx.on()` and returns a disposer, so unloading a plugin undoes everything it contributed.
+
+## Package naming
+
+The vendored packages are rescoped to `@deepseek-ai/*` (`cordis` → `@deepseek-ai/cordis`, `@cordisjs/plugin-<x>` → `@deepseek-ai/cordis-plugin-<x>`). Upstream directory names and version numbers are unchanged. Packages published under the upstream `@cordisjs` scope are not interchangeable with these.
 
 ## License
 
-[MIT](LICENSE)
-
-Third-party dependencies and their licenses are disclosed in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+MIT

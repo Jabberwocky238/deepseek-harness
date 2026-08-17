@@ -53,6 +53,7 @@
   "engines": {
     "node": "^22.19.0 || >=24.0.0"
   },
+  "packageManager": "pnpm@11.7.0",
   "dependencies": {
     "@babel/code-frame": "^7.29.0",
     "@standard-schema/spec": "^1.1.0",

@@ -12,7 +12,7 @@
     "build": "tsc -b tsconfig.json",
     "clean": "tsc -b tsconfig.json --clean",
     "typecheck": "tsc -b tsconfig.json",
-    "start": "node --import tsx vendor/cordis/bin.js"
+    "start": "node --import tsx src/main.ts"
   },
   "devDependencies": {
     "@types/js-yaml": "^4.0.9",

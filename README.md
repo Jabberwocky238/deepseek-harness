@@ -8,6 +8,7 @@ Cordis is a plugin framework built around context, effects, and fiber lifecycle.
 
 ```
 vendor/           pinned framework source
+  runtime/          aggregate entry: re-exports the framework and start()
   cordis/           context, fiber, events, registry, service, logger
   cosmokit/         shared utilities
   schemastery/      config schema and validation
@@ -17,6 +18,7 @@ vendor/           pinned framework source
   timer/            disposal-aware timers
   hmr/              hot module replacement
   logger-console/   console exporter
+src/main.ts       application entry
 src/hello.ts      example plugin
 cordis.yml        application composition
 ```
@@ -38,6 +40,18 @@ Expected output — the example plugin logs once per second, and HMR watches `sr
 Edit `src/hello.ts` while it runs; the plugin reloads in place. The tick stays at one per second because unloading the old instance ran the effect's cleanup.
 
 `pnpm build` typechecks and emits declarations for the vendored sources.
+
+## Starting from your own code
+
+The entry point is a library, not a bin. `src/main.ts` is two lines:
+
+```ts
+import { start } from '@deepseek-ai/cordis-runtime'
+
+await start({ config: './cordis.yml' })
+```
+
+`start()` creates a root context, mounts the loader, and mounts the config file as its plugin tree; it returns the context once the tree has settled. Pass `baseDir` to resolve config-relative paths against somewhere other than `process.cwd()`. The same module re-exports the framework surface (`Context`, `Service`, `Schema`, `FiberState`, …), so a host application needs one import.
 
 ## Writing a plugin
 

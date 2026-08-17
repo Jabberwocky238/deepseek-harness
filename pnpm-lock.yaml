@@ -127,6 +127,21 @@ importers:
         specifier: ^9.4.0
         version: 9.4.0
 
+  vendor/runtime:
+    dependencies:
+      '@deepseek-ai/cordis':
+        specifier: workspace:^
+        version: link:../cordis
+      '@deepseek-ai/cordis-plugin-include':
+        specifier: workspace:^
+        version: link:../include
+      '@deepseek-ai/cordis-plugin-loader':
+        specifier: workspace:^
+        version: link:../loader
+      '@deepseek-ai/schemastery':
+        specifier: link:../schemastery
+        version: link:../schemastery
+
   vendor/schemastery:
     dependencies:
       '@deepseek-ai/cosmokit':

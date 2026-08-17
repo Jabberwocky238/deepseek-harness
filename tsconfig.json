@@ -14,6 +14,7 @@
     { "path": "./vendor/group" },
     { "path": "./vendor/timer" },
     { "path": "./vendor/hmr" },
-    { "path": "./vendor/logger-console" }
+    { "path": "./vendor/logger-console" },
+    { "path": "./vendor/runtime" }
   ]
 }

@@ -28,6 +28,7 @@
     // not declaration path aliases, keep each vendor source compiled under its
     // own tsconfig boundary.
     "paths": {
+      "@deepseek-ai/cordis-runtime": ["./vendor/runtime/src/lib.ts"],
       "@deepseek-ai/cordis": ["./vendor/cordis/src"],
       "@deepseek-ai/cosmokit": ["./vendor/cosmokit/src"],
       "@deepseek-ai/schemastery": ["./vendor/schemastery/src"],

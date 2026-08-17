@@ -34,10 +34,11 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/v')
         run: |
           tag="${GITHUB_REF_NAME#v}"
-          pkg="$(node -p "require('./vendor/package.json').version")"
+          pkg="$(node -p "require('./package.json').version")"
           [ "$tag" = "$pkg" ] || { echo "tag $tag != package version $pkg" >&2; exit 1; }
 
+      - run: pnpm run verify:consumer
+
       - run: pnpm publish --access public --no-git-checks
-        working-directory: vendor
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

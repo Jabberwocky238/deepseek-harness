@@ -1,7 +1,17 @@
 import { Context } from '../../core/index.ts'
-import type { BuildFailure } from 'esbuild'
 import { codeFrameColumns } from '@babel/code-frame'
 import { readFileSync } from 'node:fs'
+
+/**
+ * The part of an esbuild `BuildFailure` this reporter reads. Declared here so
+ * a type-only import does not pull esbuild's native binary into installs.
+ */
+interface BuildFailure {
+  errors: {
+    text: string
+    location: { file: string, line: number, column: number } | null
+  }[]
+}
 
 function isBuildFailure(e: any): e is BuildFailure {
   return Array.isArray(e?.errors) && e.errors.every((error: any) => error.text)

@@ -570,7 +570,7 @@ namespace Hmr {
   })
   // [deepseek-harness] vendored modification: removed `.i18n({ 'en-US': enUS, 'zh-CN': zhCN })`
   // and the corresponding `./locales/*.yml` imports, to avoid a runtime YAML import hook
-  // (@cordisjs/unyaml) that we don't vendor. See vendor/README.md.
+  // (@cordisjs/unyaml) that we don't vendor. See FRAMEWORK.md.
 }
 
 export default Hmr

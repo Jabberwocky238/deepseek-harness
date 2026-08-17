@@ -17,8 +17,7 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm run build
-      # The template must boot against the package it ships.
-      - name: Smoke-test the template
-        run: |
-          timeout 8 pnpm start > run.log 2>&1 || true
-          grep -q 'hello tick' run.log || { echo 'template did not start'; cat run.log; exit 1; }
+
+      # The published tarball must resolve and boot on its own; a broken
+      # exports path or a missing runtime dependency only shows up here.
+      - run: pnpm run verify:consumer

@@ -1,26 +1,83 @@
 {
-  "name": "cordis-template",
+  "name": "@jabberwocky238/cordis",
+  "description": "Cordis: a plugin framework built on context, effects, and fiber lifecycle",
   "version": "0.1.0",
-  "license": "MIT",
-  "private": true,
   "type": "module",
-  "packageManager": "pnpm@11.7.0",
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Jabberwocky238/deepseek-harness.git"
+  },
+  "sideEffects": false,
+  "main": "lib/index.js",
+  "types": "lib/types/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/types/index.d.ts",
+      "default": "./lib/index.js"
+    },
+    "./timer": {
+      "types": "./lib/types/plugins/timer.d.ts",
+      "default": "./lib/plugins/timer.js"
+    },
+    "./hmr": {
+      "types": "./lib/types/plugins/hmr/index.d.ts",
+      "default": "./lib/plugins/hmr/index.js"
+    },
+    "./group": {
+      "types": "./lib/types/plugins/group.d.ts",
+      "default": "./lib/plugins/group.js"
+    },
+    "./include": {
+      "types": "./lib/types/plugins/include.d.ts",
+      "default": "./lib/plugins/include.js"
+    },
+    "./logger-console": {
+      "types": "./lib/types/plugins/logger-console/index.d.ts",
+      "default": "./lib/plugins/logger-console/index.js"
+    },
+    "./package.json": "./package.json",
+    "./loader": {
+      "types": "./lib/types/loader/index.d.ts",
+      "default": "./lib/loader/index.js"
+    }
+  },
+  "files": [
+    "lib",
+    "src"
+  ],
   "engines": {
     "node": "^22.19.0 || >=24.0.0"
   },
-  "scripts": {
-    "build": "tsc -b tsconfig.json",
-    "clean": "tsc -b tsconfig.json --clean",
-    "typecheck": "tsc -b tsconfig.json",
-    "start": "node --import tsx src/main.ts"
+  "dependencies": {
+    "@babel/code-frame": "^7.29.0",
+    "@standard-schema/spec": "^1.1.0",
+    "chokidar": "^4.0.3",
+    "js-yaml": "^4.1.0",
+    "picomatch": "^4.0.3",
+    "supports-color": "^9.4.0"
+  },
+  "peerDependencies": {
+    "node-addon-require-builtin": "^0.1.4"
+  },
+  "peerDependenciesMeta": {
+    "node-addon-require-builtin": {
+      "optional": true
+    }
   },
   "devDependencies": {
-    "@types/js-yaml": "^4.0.9",
     "@types/node": "^22.20.0",
-    "tsx": "^4.22.4",
     "typescript": "^6.0.3"
   },
-  "dependencies": {
-    "@jabberwocky238/cordis": "workspace:*"
+  "scripts": {
+    "build": "tsc",
+    "clean": "rm -rf lib",
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "npm run build",
+    "verify:consumer": "pnpm pack --pack-destination /tmp && bash scripts/verify-consumer.sh /tmp"
   }
 }

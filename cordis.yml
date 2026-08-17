@@ -1,9 +1,9 @@
 - id: logger
-  name: '@deepseek-ai/cordis-plugin-logger-console'
+  name: '@jabberwocky238/cordis/logger-console'
 - id: timer
-  name: '@deepseek-ai/cordis-plugin-timer'
+  name: '@jabberwocky238/cordis/timer'
 - id: hmr
-  name: '@deepseek-ai/cordis-plugin-hmr'
+  name: '@jabberwocky238/cordis/hmr'
   config:
     root: ['./src']
 - id: hello

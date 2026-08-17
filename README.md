@@ -7,17 +7,13 @@ Cordis is a plugin framework built around context, effects, and fiber lifecycle.
 ## Layout
 
 ```
-vendor/           pinned framework source
-  runtime/          aggregate entry: re-exports the framework and start()
-  cordis/           context, fiber, events, registry, service, logger
-  cosmokit/         shared utilities
-  schemastery/      config schema and validation
-  loader/           plugin tree from configuration
-  include/          config-file includes and patch overlays
-  group/            nested plugin groups
-  timer/            disposal-aware timers
-  hmr/              hot module replacement
-  logger-console/   console exporter
+vendor/           the @jabberwocky238/cordis package source
+  src/core/         context, fiber, events, registry, service, logger
+  src/cosmokit/     shared utilities
+  src/schemastery/  config schema and validation
+  src/loader/       plugin tree from configuration
+  src/plugins/      include, group, timer, hmr, logger-console
+  src/index.ts      aggregate exports and start()
 src/main.ts       application entry
 src/hello.ts      example plugin
 cordis.yml        application composition
@@ -46,7 +42,7 @@ Edit `src/hello.ts` while it runs; the plugin reloads in place. The tick stays a
 The entry point is a library, not a bin. `src/main.ts` is two lines:
 
 ```ts
-import { start } from '@deepseek-ai/cordis-runtime'
+import { start } from '@jabberwocky238/cordis'
 
 await start({ config: './cordis.yml' })
 ```
@@ -56,7 +52,7 @@ await start({ config: './cordis.yml' })
 ## Writing a plugin
 
 ```ts
-import type { Context } from '@deepseek-ai/cordis'
+import type { Context } from '@jabberwocky238/cordis'
 
 export const name = 'my-plugin'
 export const inject = ['timer']
@@ -80,9 +76,11 @@ Register it in `cordis.yml`:
 
 Every registration goes through `ctx.effect()` or `ctx.on()` and returns a disposer, so unloading a plugin undoes everything it contributed.
 
-## Package naming
+## Publishing
 
-The vendored packages are rescoped to `@deepseek-ai/*` (`cordis` → `@deepseek-ai/cordis`, `@cordisjs/plugin-<x>` → `@deepseek-ai/cordis-plugin-<x>`). Upstream directory names and version numbers are unchanged. Packages published under the upstream `@cordisjs` scope are not interchangeable with these.
+The framework publishes as one package, `@jabberwocky238/cordis`. Tagging `v<version>` runs the publish workflow, which verifies the tag matches `vendor/package.json` and publishes with npm provenance. Set the `NPM_TOKEN` repository secret first.
+
+Built-in plugins are subpath exports (`@jabberwocky238/cordis/timer`, `/hmr`, `/group`, `/include`, `/logger-console`), so a config file names them the same way an application names its own.
 
 ## License
 

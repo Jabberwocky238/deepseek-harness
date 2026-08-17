@@ -1,20 +1,11 @@
 packages:
-  - vendor/*
-
-# Vendored framework packages keep their upstream semver ranges, while local
-# builds must resolve those matching names to this workspace's pinned sources.
-linkWorkspacePackages: true
-
-overrides:
-  '@deepseek-ai/cosmokit': 'link:vendor/cosmokit'
-  '@deepseek-ai/schemastery': 'link:vendor/schemastery'
+  - vendor
 
 peerDependencyRules:
   allowedVersions:
     typescript: '>=5 <7'
 
 # pnpm 10+ blocks any dependency shipping an install/build script until it is
-# explicitly reviewed here (strictDepBuilds defaults to true: an unlisted script
-# is a hard install error). Deny by default; esbuild ships a native binary.
+# explicitly reviewed here. Deny by default; esbuild ships a native binary.
 allowBuilds:
   esbuild: true

@@ -1,4 +1,4 @@
-import type { Context } from '@deepseek-ai/cordis'
+import type { Context } from '@jabberwocky238/cordis'
 
 export const name = 'hello'
 

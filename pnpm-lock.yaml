@@ -4,13 +4,13 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
-overrides:
-  '@deepseek-ai/cosmokit': link:vendor/cosmokit
-  '@deepseek-ai/schemastery': link:vendor/schemastery
-
 importers:
 
   .:
+    dependencies:
+      '@jabberwocky238/cordis':
+        specifier: workspace:*
+        version: link:vendor
     devDependencies:
       '@types/js-yaml':
         specifier: ^4.0.9
@@ -25,140 +25,33 @@ importers:
         specifier: ^6.0.3
         version: 6.0.3
 
-  vendor/cordis:
-    dependencies:
-      '@deepseek-ai/cordis-plugin-include':
-        specifier: workspace:^
-        version: link:../include
-      '@deepseek-ai/cordis-plugin-loader':
-        specifier: workspace:^
-        version: link:../loader
-      '@deepseek-ai/cosmokit':
-        specifier: link:../cosmokit
-        version: link:../cosmokit
-      '@standard-schema/spec':
-        specifier: ^1.1.0
-        version: 1.1.0
-
-  vendor/cosmokit: {}
-
-  vendor/group:
-    dependencies:
-      '@deepseek-ai/cordis':
-        specifier: workspace:^
-        version: link:../cordis
-      '@deepseek-ai/cordis-plugin-loader':
-        specifier: workspace:^
-        version: link:../loader
-
-  vendor/hmr:
+  vendor:
     dependencies:
       '@babel/code-frame':
         specifier: ^7.29.0
         version: 7.29.7
-      '@deepseek-ai/cordis':
-        specifier: workspace:^
-        version: link:../cordis
-      '@deepseek-ai/cordis-plugin-timer':
-        specifier: workspace:^
-        version: link:../timer
-      '@deepseek-ai/cosmokit':
-        specifier: link:../cosmokit
-        version: link:../cosmokit
-      '@deepseek-ai/schemastery':
-        specifier: link:../schemastery
-        version: link:../schemastery
-      chokidar:
-        specifier: ^4.0.3
-        version: 4.0.3
-      picomatch:
-        specifier: ^4.0.3
-        version: 4.0.5
-    devDependencies:
-      '@types/babel__code-frame':
-        specifier: ^7.27.0
-        version: 7.27.0
-      '@types/picomatch':
-        specifier: ^3.0.2
-        version: 3.0.2
-      esbuild:
-        specifier: ^0.28.1
-        version: 0.28.2
-
-  vendor/include:
-    dependencies:
-      '@deepseek-ai/cordis':
-        specifier: workspace:^
-        version: link:../cordis
-      '@deepseek-ai/cordis-plugin-loader':
-        specifier: workspace:^
-        version: link:../loader
-      '@deepseek-ai/cosmokit':
-        specifier: link:../cosmokit
-        version: link:../cosmokit
-      js-yaml:
-        specifier: ^4.1.0
-        version: 4.3.1
-
-  vendor/loader:
-    dependencies:
-      '@deepseek-ai/cordis':
-        specifier: workspace:^
-        version: link:../cordis
-      '@deepseek-ai/cosmokit':
-        specifier: link:../cosmokit
-        version: link:../cosmokit
-      node-addon-require-builtin:
-        specifier: ^0.1.4
-        version: 0.1.5
-
-  vendor/logger-console:
-    dependencies:
-      '@deepseek-ai/cordis':
-        specifier: workspace:^
-        version: link:../cordis
-      '@deepseek-ai/cosmokit':
-        specifier: link:../cosmokit
-        version: link:../cosmokit
-      '@deepseek-ai/schemastery':
-        specifier: link:../schemastery
-        version: link:../schemastery
-      supports-color:
-        specifier: ^9.4.0
-        version: 9.4.0
-
-  vendor/runtime:
-    dependencies:
-      '@deepseek-ai/cordis':
-        specifier: workspace:^
-        version: link:../cordis
-      '@deepseek-ai/cordis-plugin-include':
-        specifier: workspace:^
-        version: link:../include
-      '@deepseek-ai/cordis-plugin-loader':
-        specifier: workspace:^
-        version: link:../loader
-      '@deepseek-ai/schemastery':
-        specifier: link:../schemastery
-        version: link:../schemastery
-
-  vendor/schemastery:
-    dependencies:
-      '@deepseek-ai/cosmokit':
-        specifier: link:../cosmokit
-        version: link:../cosmokit
       '@standard-schema/spec':
         specifier: ^1.1.0
         version: 1.1.0
-
-  vendor/timer:
-    dependencies:
-      '@deepseek-ai/cordis':
-        specifier: workspace:^
-        version: link:../cordis
-      '@deepseek-ai/cosmokit':
-        specifier: link:../cosmokit
-        version: link:../cosmokit
+      chokidar:
+        specifier: ^4.0.3
+        version: 4.0.3
+      js-yaml:
+        specifier: ^4.1.0
+        version: 4.3.1
+      node-addon-require-builtin:
+        specifier: ^0.1.4
+        version: 0.1.5
+      picomatch:
+        specifier: ^4.0.3
+        version: 4.0.5
+      supports-color:
+        specifier: ^9.4.0
+        version: 9.4.0
+    devDependencies:
+      esbuild:
+        specifier: ^0.28.0
+        version: 0.28.2
 
 packages:
 
@@ -329,17 +222,11 @@ packages:
   '@standard-schema/spec@1.1.0':
     resolution: {integrity: sha512-l2aFy5jALhniG5HgqrD6jXLi/rUWrKvqN/qJx6yoJsgKhblVd+iqqU4RCXavm/jPityDo5TCvKMnpjKnOriy0w==}
 
-  '@types/babel__code-frame@7.27.0':
-    resolution: {integrity: sha512-Dwlo+LrxDx/0SpfmJ/BKveHf7QXWvLBLc+x03l5sbzykj3oB9nHygCpSECF1a+s+QIxbghe+KHqC90vGtxLRAA==}
-
   '@types/js-yaml@4.0.9':
     resolution: {integrity: sha512-k4MGaQl5TGo/iipqb2UDG2UwjXziSWkh0uysQelTlJpX1qGlpUZYm8PnO4DxG1qBomtJUdYJ6qR6xdIah10JLg==}
 
   '@types/node@22.20.1':
     resolution: {integrity: sha512-EANqOCF9QFyra+4pfxUcX9STKJpCLjMbObVzljIJomAWSnuSIEAvyzEU53GaajbXJEgdh0iEcPL+DGvpUd4k1Q==}
-
-  '@types/picomatch@3.0.2':
-    resolution: {integrity: sha512-n0i8TD3UDB7paoMMxA3Y65vUncFJXjcUf7lQY7YyKGl6031FNjfsLs6pdLFCy2GNFxItPJG8GvvpbZc2skH7WA==}
 
   argparse@2.0.1:
     resolution: {integrity: sha512-8+9WqebbFzpX9OR+Wa6O29asIogeRMzcGtAINdpMHHyAg10f05aSFVBbcEqGf/PXw1EjAZ+q2/bEBg3DvurK3Q==}
@@ -535,15 +422,11 @@ snapshots:
 
   '@standard-schema/spec@1.1.0': {}
 
-  '@types/babel__code-frame@7.27.0': {}
-
   '@types/js-yaml@4.0.9': {}
 
   '@types/node@22.20.1':
     dependencies:
       undici-types: 6.21.0
-
-  '@types/picomatch@3.0.2': {}
 
   argparse@2.0.1: {}
 

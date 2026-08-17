@@ -1,20 +1,10 @@
 {
   // Solution file: the whole-repo graph for `tsc -b` and the tsserver entry.
-  // `extends` carries the base paths for get-tsconfig consumers — tsx running
-  // files with no nearer tsconfig resolves workspace imports through this
-  // file. `files: []` keeps it program-less.
+  // `extends` carries the base paths for get-tsconfig consumers. `files: []`
+  // keeps it program-less.
   "extends": "./tsconfig.base.json",
   "files": [],
   "references": [
-    { "path": "./vendor/cosmokit" },
-    { "path": "./vendor/schemastery" },
-    { "path": "./vendor/cordis" },
-    { "path": "./vendor/loader" },
-    { "path": "./vendor/include" },
-    { "path": "./vendor/group" },
-    { "path": "./vendor/timer" },
-    { "path": "./vendor/hmr" },
-    { "path": "./vendor/logger-console" },
-    { "path": "./vendor/runtime" }
+    { "path": "./vendor" }
   ]
 }

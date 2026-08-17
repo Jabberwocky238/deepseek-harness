@@ -1,0 +1,24 @@
+name: ci
+
+on:
+  push:
+    branches: [master, 'feat/**']
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run build
+      # The template must boot against the package it ships.
+      - name: Smoke-test the template
+        run: |
+          timeout 8 pnpm start > run.log 2>&1 || true
+          grep -q 'hello tick' run.log || { echo 'template did not start'; cat run.log; exit 1; }

@@ -39,6 +39,7 @@ jobs:
 
       - run: pnpm run verify:consumer
 
+      # Credentials come from the OIDC exchange configured as a trusted
+      # publisher on npm, so no token is stored in this repository. npm derives
+      # provenance from the same exchange.
       - run: pnpm publish --access public --no-git-checks
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

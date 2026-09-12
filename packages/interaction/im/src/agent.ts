@@ -1,4 +1,4 @@
-/** AI recipient admission and the scoped, permission-checked talk tool. */
+/** AI recipient admission, private IM discovery, and permission-checked messaging. */
 
 import type { Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
@@ -10,8 +10,8 @@ import { randomUUID } from 'node:crypto'
 import { basename } from 'node:path'
 import type {} from '@deepseek-ai/dsh-attachment'
 import type {} from '@deepseek-ai/dsh-fs'
-import { imMessageIdSchema, participantIdSchema } from './model.ts'
-import type { ConversationId, ImAttachment, ParticipantId } from './model.ts'
+import { agentPageSchema, conversationIdSchema, imMessageIdSchema } from './model.ts'
+import type { ImAttachment, ParticipantId } from './model.ts'
 import type { ImService } from './index.ts'
 
 declare module '@deepseek-ai/dsh-session-projection/types' {
@@ -26,22 +26,21 @@ const receipts: ProjectionDefinition<'imReceipts'> = {
   apply(state, event) {
     if (event.type !== 'user/message') return state
     const id = event.data.id
-    return id.startsWith('im:') && !state.includes(id) ? [...state, id] : state
+    return (id.startsWith('im:') || id.startsWith('im-notice:')) && !state.includes(id) ? [...state, id] : state
   },
 }
 
 /**
- * Bind one AI in one conversation to an externally owned Agent; ordinary model replies are not forwarded to other AIs.
+ * Bind one AI identity to an externally owned Agent; ordinary model replies are not forwarded to other AIs.
  * Queue delivery preserves running tools and prevents unstarted tools until the new input reaches a model request.
  * @param ctx - owning plugin context; must provide Sessions, tools, and Session projections.
  * @param im - persistent message distributor.
- * @param conversation - explicit conversation membership.
- * @param participant - AI identity whose authority the talk tool uses.
+ * @param participant - AI identity used for private discovery and messaging authority.
  * @param agent - dedicated Agent for this participant and conversation.
  * @returns a disposer that removes tools, guards, and receiver admission; the caller still owns Agent disposal.
  */
 export function attachAgent(
-  ctx: Context, im: ImService, conversation: ConversationId, participant: ParticipantId, agent: Agent,
+  ctx: Context, im: ImService, participant: ParticipantId, agent: Agent,
 ): () => Promise<void> {
   if (im.participant(participant).kind !== 'ai') throw new Error('IM Agent binding requires an AI participant')
   const projections = ctx.sessionProjections
@@ -62,9 +61,9 @@ export function attachAgent(
     : undefined)
   const removeTool = agent.ctx.tools.register(defineTool({
     name: 'talk',
-    description: 'Publish text, images, or files in this conversation. People in the conversation can see your message and attachments. Set to to address an authorized AI; omit it to address the human members. AI-to-AI contact requires explicit permission. Delivery does not stop a tool already running.',
+    description: 'Send IM replies, text, images, or files in a joined conversation. Use talk for every outgoing IM message; ordinary assistant text is private. People in the conversation can see your message and attachments. Messages are visible to all members of the selected chat. Direct chats require a mutual contact. Group members can communicate in their group. Delivery does not stop a tool already running.',
     parameters: {
-      to: { type: 'string', description: 'Participant id of the recipient; omission addresses the human members.' },
+      conversation: { type: 'string', description: 'Joined conversation id from im_context; omission uses your selected page.' },
       message: { type: 'string', required: true, description: 'Message text; may be empty when sending attachments.' },
       files: {
         type: 'array', description: 'Workspace files to publish without interpreting their contents.',
@@ -104,38 +103,136 @@ export function attachAgent(
             break
         }
       }
-      const room = im.conversations(participant, im.participant(participant).namespace).find(value => value.id === conversation)
+      const page = im.agentPage(participant)
+      const joined = im.conversations(participant, im.participant(participant).namespace)
+      const selected = page.kind === 'group' ? page.id : page.kind === 'contact'
+        ? joined.find(chat => chat.kind === 'direct' && chat.members.includes(page.id))?.id : undefined
+      const destination = args.conversation === undefined ? selected : conversationIdSchema.parse(args.conversation)
+      if (destination === undefined) throw new Error('Select a conversation with im_context or provide conversation to talk')
+      const room = im.conversations(participant, im.participant(participant).namespace).find(value => value.id === destination)
       if (room === undefined) throw new Error('IM conversation membership required')
-      const recipients = args.to === undefined
-        ? room.members.filter(id => im.participant(id).kind === 'human')
-        : [participantIdSchema.parse(args.to)]
+      const recipients = room.members.filter(id => id !== participant)
       const sent = await im.send({
-        id: imMessageIdSchema.parse(randomUUID()), conversation, sender: participant,
+        id: imMessageIdSchema.parse(randomUUID()), conversation: destination, sender: participant,
         recipients, text: args.message, mode: 'queue', attachments,
       })
       return { id: sent.id, sequence: sent.sequence }
     },
   }))
   let removeReceiver: () => Promise<void>
+  let removeContext: (() => void) | undefined
   try {
-    removeReceiver = im.register(conversation, participant, async (message, signal) => {
+    const person = {
+      type: 'object', additionalProperties: false,
+      properties: {
+        id: { type: 'string', required: true },
+        name: { type: 'string', required: true },
+        kind: { type: 'string', enum: ['human', 'ai'], required: true },
+        namespace: { type: 'string', required: true },
+      },
+    } as const
+    removeContext = agent.ctx.tools.register(defineTool({
+      name: 'im_context',
+      description: 'See your own IM identity, contacts, and joined direct chats and groups. Contact ids address participants; conversation ids identify chats. Contacts authorize private communication in both directions. Group members can communicate in their group. Use conversation ids with talk to select a joined chat. Set page to view a group or contact; unread content on that page enters your queue before the next tool. Set page kind to none to leave all pages and receive only sender/count notifications.',
+      parameters: {
+        page: {
+          type: 'object', description: 'Set the page in front of you: group or contact with its id, or none to leave all pages.',
+          additionalProperties: false,
+          properties: {
+            kind: { type: 'string', enum: ['none', 'group', 'contact'], required: true },
+            id: { type: 'string', description: 'Required for a group or contact page.' },
+          },
+        },
+      },
+      output: {
+        schema: {
+          type: 'object', additionalProperties: false,
+          properties: {
+            self: { ...person, required: true },
+            page: {
+              type: 'object', required: true, additionalProperties: false,
+              properties: { kind: { type: 'string', required: true }, id: { type: 'string' } },
+            },
+            unread: {
+              type: 'array', required: true,
+              items: {
+                type: 'object', additionalProperties: false,
+                properties: {
+                  conversation: { type: 'string', required: true }, sender: { type: 'string', required: true },
+                  name: { type: 'string', required: true }, count: { type: 'number', required: true },
+                },
+              },
+            },
+            contacts: { type: 'array', items: person, required: true },
+            conversations: {
+              type: 'array', required: true,
+              items: {
+                type: 'object', additionalProperties: false,
+                properties: {
+                  id: { type: 'string', required: true },
+                  name: { type: 'string', required: true },
+                  kind: { type: 'string', enum: ['direct', 'group'], required: true },
+                  members: { type: 'array', items: person, required: true },
+                },
+              },
+            },
+          },
+        },
+        render: (_args, value) => [{ type: 'text', text: JSON.stringify(value) }],
+      },
+      async execute(args, exec) {
+        if (exec.agent !== agent) throw new Error('im_context must execute as its bound AI participant')
+        if (args.page !== undefined) await im.setAgentPage(participant, agentPageSchema.parse(args.page))
+        const self = im.participant(participant)
+        const unread = new Map<string, { conversation: string; sender: string; name: string; count: number }>()
+        for (const message of im.inbox(participant)) {
+          const key = JSON.stringify([message.conversation, message.sender])
+          const summary = unread.get(key)
+          if (summary === undefined) unread.set(key, {
+            conversation: message.conversation, sender: message.sender, name: im.participant(message.sender).name, count: 1,
+          })
+          else summary.count++
+        }
+        return {
+          self, page: im.agentPage(participant), unread: [...unread.values()],
+          contacts: im.contacts(participant),
+          conversations: im.conversations(participant, self.namespace).map(chat => ({
+            id: chat.id, name: chat.name, kind: chat.kind, members: chat.members.map(id => im.participant(id)),
+          })),
+        }
+      },
+    }))
+    removeReceiver = im.registerParticipant(participant, async (message, signal) => {
       signal.throwIfAborted()
-      const id = MessageId(`im:${message.id}`)
+      const page = im.agentPage(participant)
+      const chat = im.conversations(participant, im.participant(participant).namespace).find(value => value.id === message.conversation)
+      const viewing = (page.kind === 'group' && page.id === message.conversation)
+        || (page.kind === 'contact' && chat?.kind === 'direct' && chat.members.includes(page.id))
+      const noticePrefix = `im-notice:${JSON.stringify([message.conversation, message.sender])}:`
+      const id = MessageId(viewing ? `im:${message.id}` : `${noticePrefix}${message.id}`)
       const accepted = projections.stateOf(agent.session, 'imReceipts')
       if (accepted === undefined) throw new Error('IM receipt projection is missing')
-      if (accepted.includes(id)) return
+      if (accepted.includes(id)) return viewing ? undefined : 'queued'
       for (const target of ['next-step', 'next-turn'] as const) {
         const inbox = target === 'next-step' ? agent.inbox.nextStep : agent.inbox.nextTurn
-        const index = inbox.findIndex(value => value.id === id)
-        if (index >= 0) agent.inbox.splice(target, index, 1, [])
+        for (let index = inbox.length - 1; index >= 0; index--) {
+          const pending = inbox[index]
+          if (pending?.id === id || pending?.id.startsWith(noticePrefix)) agent.inbox.splice(target, index, 1, [])
+        }
       }
       const sender = im.participant(message.sender)
+      const notification = {
+        conversation: message.conversation, conversationName: chat?.name, sender: sender.id, name: sender.name,
+        count: im.inbox(participant).filter(value => value.conversation === message.conversation && value.sender === message.sender).length,
+      }
       const input = freezeMessage({
         id, role: 'user' as const,
-        source: sender.kind === 'human' ? { kind: 'user' as const } : { kind: 'plugin' as const, plugin: 'im', form: 'relay' as const },
-        content: [{ type: 'text' as const, text: JSON.stringify({ sender: sender.id, name: sender.name, text: message.text }) }, ...message.attachments],
+        source: viewing && sender.kind === 'human' ? { kind: 'user' as const } : { kind: 'plugin' as const, plugin: 'im', form: 'relay' as const },
+        content: viewing
+          ? [{ type: 'text' as const, text: JSON.stringify({ conversation: message.conversation, sender: sender.id, name: sender.name, text: message.text }) }, ...message.attachments]
+          : [{ type: 'text' as const, text: JSON.stringify({ notification, action: 'You may ignore this notification or open its page with im_context.' }) }],
       })
-      switch (message.mode) {
+      switch (viewing ? 'queue' : message.mode) {
         case 'interrupt':
           agent.cancel({ kind: 'user' }, { keepInbox: true })
           agent.steer(input)
@@ -148,6 +245,7 @@ export function attachAgent(
       return 'queued'
     })
   } catch (error: unknown) {
+    removeContext?.()
     removeTool()
     removeGuard()
     removeProjection()
@@ -158,6 +256,7 @@ export function attachAgent(
     await removeReceiver()
     removeEvents()
     await Promise.all(acknowledgements)
+    removeContext()
     removeTool()
     removeGuard()
     removeProjection()

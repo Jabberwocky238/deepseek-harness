@@ -100,7 +100,8 @@
     "js-yaml": "^4.2.0",
     "node-addon-require-builtin": "^0.1.4",
     "@deepseek-ai/dsh-http-proxy": "workspace:^",
-    "@deepseek-ai/dsh-wecom": "workspace:^"
+    "@deepseek-ai/dsh-wecom": "workspace:^",
+    "@deepseek-ai/dsh-im": "workspace:^"
   },
   "devDependencies": {
     "@agentclientprotocol/sdk": "1.4.0",

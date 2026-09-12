@@ -73,6 +73,18 @@
     },
     {
       "path": "../../attachment/attachment-local"
+    },
+    {
+      "path": "../im"
+    },
+    {
+      "path": "../../storage/storage"
+    },
+    {
+      "path": "../../storage/storage-json"
+    },
+    {
+      "path": "../../storage/storage-domain"
     }
   ]
 }

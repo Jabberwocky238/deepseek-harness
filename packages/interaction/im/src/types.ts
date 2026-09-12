@@ -31,13 +31,11 @@ export interface Conversation {
   members: ParticipantId[]
   maxAiMessages: number
 }
-/** Directional permission independent of contact lists and group membership. */
+/** One mutual contact relationship, which authorizes communication in both directions. */
 export interface Authorization {
   id: AuthorizationId
-  conversation: ConversationId
   from: ParticipantId
   to: ParticipantId
-  direction: 'one-way' | 'two-way'
 }
 /** Picture or verbatim file that human readers can view or download. */
 export type ImAttachment = { type: 'file'; attachment: FileAttachmentRef } | { type: 'image'; attachment: ImageAttachmentRef }
@@ -55,10 +53,12 @@ export interface ImMessage {
 }
 /** Caller-owned message input; the distributor assigns order and receipts. */
 export type MessageInput = Omit<ImMessage, 'sequence' | 'deliveries'>
-/** Dedicated resumable Session for one AI and conversation. */
+/** Resumable Session and desired online state for one AI identity. */
 export interface AgentBinding {
-  conversation: ConversationId
   participant: ParticipantId
   sessionId: SessionId
   enabled: boolean
 }
+
+/** The conversation currently in front of an AI; leaving all pages suppresses automatic content admission. */
+export type AgentPage = { kind: 'none' } | { kind: 'group'; id: ConversationId } | { kind: 'contact'; id: ParticipantId }

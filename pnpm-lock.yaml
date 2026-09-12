@@ -20,6 +20,9 @@ importers:
       '@deepseek-ai/dsh-agent':
         specifier: workspace:^
         version: link:packages/core/agent
+      '@deepseek-ai/dsh-llm-replay':
+        specifier: workspace:^
+        version: link:packages/test-support/llm-replay
       '@deepseek-ai/dsh-tool-session-query':
         specifier: workspace:^
         version: link:packages/session-query/tool-session-query
@@ -215,6 +218,9 @@ importers:
       '@deepseek-ai/dsh-http-proxy':
         specifier: workspace:^
         version: link:../../packages/util/http-proxy
+      '@deepseek-ai/dsh-im':
+        specifier: workspace:^
+        version: link:../../packages/interaction/im
       '@deepseek-ai/dsh-jobs-local':
         specifier: workspace:^
         version: link:../../packages/jobs/jobs-local
@@ -6984,6 +6990,9 @@ importers:
       '@deepseek-ai/dsh-brand':
         specifier: workspace:^
         version: link:../../util/brand
+      '@deepseek-ai/dsh-im':
+        specifier: workspace:^
+        version: link:../im
       '@deepseek-ai/dsh-llm':
         specifier: workspace:^
         version: link:../../llm/llm
@@ -7051,6 +7060,15 @@ importers:
       '@deepseek-ai/dsh-shell':
         specifier: workspace:^
         version: link:../../shell/shell
+      '@deepseek-ai/dsh-storage':
+        specifier: workspace:^
+        version: link:../../storage/storage
+      '@deepseek-ai/dsh-storage-domain':
+        specifier: workspace:^
+        version: link:../../storage/storage-domain
+      '@deepseek-ai/dsh-storage-json':
+        specifier: workspace:^
+        version: link:../../storage/storage-json
       '@deepseek-ai/dsh-system-prompt':
         specifier: workspace:^
         version: link:../../core/system-prompt

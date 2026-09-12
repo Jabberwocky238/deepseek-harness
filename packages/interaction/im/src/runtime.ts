@@ -11,8 +11,7 @@ import type {} from '@deepseek-ai/dsh-agent-presets'
 import type {} from '@deepseek-ai/dsh-permission-presets'
 import type {} from '@deepseek-ai/dsh-session-persistence'
 import { attachAgent } from './agent.ts'
-import { imMessageIdSchema } from './model.ts'
-import type { ConversationId, ParticipantId } from './model.ts'
+import type { ParticipantId } from './model.ts'
 import type {} from './index.ts'
 
 /** Cordis function-plugin name. */
@@ -41,7 +40,7 @@ declare module '@deepseek-ai/cordis' {
 
 interface Connected { handle: AgentHandle; detach: () => Promise<void> }
 
-/** Owns one independently resumable Agent per AI and chat conversation. */
+/** Owns one resumable Agent per AI identity across its joined chats. */
 export class ImRuntime {
   private readonly connected = new Map<string, Connected>()
   private tail = Promise.resolve()
@@ -51,18 +50,17 @@ export class ImRuntime {
 
   /**
    * Bring one AI online and replay its durable inbox. The Session identity survives disconnect and restart.
-   * @param conversation - chat containing the AI.
    * @param participant - AI to connect.
    * @returns after the restored or new Agent can accept messages.
    */
-  connect(conversation: ConversationId, participant: ParticipantId): Promise<void> {
+  connect(participant: ParticipantId): Promise<void> {
     const job = this.tail.then(async () => {
       this.lifetime.signal.throwIfAborted()
-      const key = JSON.stringify([conversation, participant])
+      const key = JSON.stringify([participant])
       if (this.connected.has(key)) return
       const selection = this.ctx.agentDefaultModel.currentSelection()
-      const prior = this.ctx.im.agentBindings().find(value => value.conversation === conversation && value.participant === participant)
-      const binding = { conversation, participant, sessionId: prior?.sessionId ?? SessionId(`im-${randomUUID()}`), enabled: true }
+      const prior = this.ctx.im.agentBindings().find(value => value.participant === participant)
+      const binding = { participant, sessionId: prior?.sessionId ?? SessionId(`im-${randomUUID()}`), enabled: true }
       await this.ctx.im.setAgentBinding(binding)
       const setup = async (agentCtx: Context): Promise<void> => {
         if (this.config.agentPreset !== undefined) {
@@ -80,24 +78,8 @@ export class ImRuntime {
       try {
         this.lifetime.signal.throwIfAborted()
         this.ctx.permissionPresets.set(handle.agent.session, this.config.permissionPreset)
-        const detach = attachAgent(this.ctx, this.ctx.im, conversation, participant, handle.agent)
-        const jobs = new Set<Promise<void>>()
-        const removeReplies = this.ctx.on('session/event', (session, event) => {
-          if (session !== handle.agent.session || event.type !== 'assistant/message') return
-          const text = event.data.message.content.filter(block => block.type === 'text').map(block => block.text).join('')
-          if (text === '') return
-          const group = this.ctx.im.conversations(participant, this.ctx.im.participant(participant).namespace)
-            .find(value => value.id === conversation)
-          const recipients = group?.members.filter(id => this.ctx.im.participant(id).kind === 'human') ?? []
-          if (recipients.length === 0) return
-          const job = this.ctx.im.send({
-            id: imMessageIdSchema.parse(`reply:${session.id}:${String(event.seq)}`), conversation, sender: participant,
-            recipients, text, attachments: [], mode: 'queue',
-          }).then(() => {}, () => { this.ctx.logger.warn('IM assistant reply could not be published') })
-          jobs.add(job)
-          void job.then(() => { jobs.delete(job) })
-        })
-        this.connected.set(key, { handle, detach: async () => { removeReplies(); await detach(); await Promise.all(jobs) } })
+        const detach = attachAgent(this.ctx, this.ctx.im, participant, handle.agent)
+        this.connected.set(key, { handle, detach })
       } catch (error: unknown) {
         await handle.dispose()
         throw error
@@ -109,16 +91,15 @@ export class ImRuntime {
 
   /**
    * Take an AI offline without deleting its inbox, history, or Session association.
-   * @param conversation - chat containing the AI.
    * @param participant - AI to disconnect.
    * @returns after its active work stops and owned resources drain.
    */
-  async disconnect(conversation: ConversationId, participant: ParticipantId): Promise<void> {
+  async disconnect(participant: ParticipantId): Promise<void> {
     await this.tail
-    const binding = this.ctx.im.agentBindings().find(value => value.conversation === conversation && value.participant === participant)
+    const binding = this.ctx.im.agentBindings().find(value => value.participant === participant)
     if (binding === undefined) throw new Error('IM Agent binding not found')
     await this.ctx.im.setAgentBinding({ ...binding, enabled: false })
-    const key = JSON.stringify([conversation, participant])
+    const key = JSON.stringify([participant])
     const connected = this.connected.get(key)
     this.connected.delete(key)
     if (connected !== undefined) {
@@ -152,6 +133,6 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
   ctx.effect(() => () => runtime.close())
   ctx.provide('imRuntime', runtime)
   for (const binding of ctx.im.agentBindings()) {
-    if (binding.enabled) await runtime.connect(binding.conversation, binding.participant)
+    if (binding.enabled) await runtime.connect(binding.participant)
   }
 }

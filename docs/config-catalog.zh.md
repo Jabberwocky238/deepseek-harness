@@ -1000,7 +1000,7 @@ export interface Config {
 }
 ```
 
-源码： [`packages/interaction/im/src/index.ts:18`](../packages/interaction/im/src/index.ts)
+源码： [`packages/interaction/im/src/index.ts:19`](../packages/interaction/im/src/index.ts)
 
 <a id="deepseek-aidsh-invariants"></a>
 
@@ -3440,7 +3440,7 @@ export interface Config {
 
 ## `@deepseek-ai/dsh-wecom`
 
-需要： `agents` · `sessions` · `credentials` · `agentDefaultModel` · `permissionPresets` · `attachments`
+依赖： `agents` · `sessions` · `credentials` · `agentDefaultModel` · `permissionPresets` · `attachments` · `sessionProjections` · `tools`
 
 ```ts config-catalog
 /** Connection, admission, and Agent settings for one WeCom bot. */
@@ -3457,6 +3457,15 @@ export interface Config {
   permissionPreset: string
   /** Optional Agent preset; omission uses globally mounted capabilities. */
   agentPreset?: string
+  /** Enable IM discovery and messaging with this durable per-conversation AI publication budget. */
+  imMaxAiMessages?: number
+  /** Trusted bot roster, including this bot, whose Agents become mutual contacts for the same user and chat. */
+  imBotContacts?: {
+    /** WeCom bot ID in the shared contact roster. */
+    botId: string
+    /** Contact name exposed to the Agents. */
+    name: string
+  }[]
   /** WeCom endpoint; unencrypted connections are permitted only on loopback. */
   wsUrl: string
   /** Maximum retained conversations until plugin reload. */
@@ -3492,7 +3501,7 @@ export interface Config {
 }
 ```
 
-来源： [`packages/interaction/wecom/src/index.ts:26`](../packages/interaction/wecom/src/index.ts)
+源码： [`packages/interaction/wecom/src/index.ts:31`](../packages/interaction/wecom/src/index.ts)
 
 <a id="deepseek-aidsh-workflow-worker-thread"></a>
 

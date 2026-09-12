@@ -3,8 +3,9 @@
 import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import type { Domain } from '@deepseek-ai/dsh-storage-domain'
-import { imDomain } from './model.ts'
-import type { AgentBinding, Authorization, AuthorizationId, Conversation, ConversationId, ImMessage, ImMessageId, MessageInput, Participant, ParticipantId } from './model.ts'
+import { randomUUID } from 'node:crypto'
+import { authorizationIdSchema, imDomain } from './model.ts'
+import type { AgentBinding, AgentPage, Authorization, AuthorizationId, Conversation, ConversationId, ImMessage, ImMessageId, MessageInput, Participant, ParticipantId } from './model.ts'
 
 export * from './model.ts'
 export { attachAgent } from './agent.ts'
@@ -119,6 +120,8 @@ export class ImService {
   async send(input: MessageInput): Promise<ImMessage> {
     const message = await this.mutate(async () => {
       this.requireMember(input.conversation, input.sender)
+      const target = this.domain.table('conversations').get(input.conversation)
+      if (target?.kind === 'group') input = { ...input, recipients: target.members.filter(member => member !== input.sender) }
       if (input.recipients.length === 0 || new Set(input.recipients).size !== input.recipients.length) throw new Error('IM recipients must be distinct and nonempty')
       for (const recipient of input.recipients) {
         this.requireMember(input.conversation, recipient)
@@ -138,11 +141,9 @@ export class ImService {
       if (table.size >= this.config.maxMessages) throw new Error('IM message limit reached')
       const conversation = this.domain.table('conversations').get(input.conversation)
       if (conversation === undefined) throw new Error('IM conversation is missing')
+      if (conversation.kind === 'direct' && input.recipients.some(recipient =>
+        !this.contacts(input.sender).some(contact => contact.id === recipient))) throw new Error('IM direct messaging requires a contact')
       if (this.participant(input.sender).kind === 'ai') {
-        for (const recipient of input.recipients) {
-          if (this.participant(recipient).kind === 'ai'
-            && !this.isAuthorized(input.conversation, input.sender, recipient)) throw new Error('IM AI communication is not authorized')
-        }
         const used = [...table.entries()].filter(([, row]) => row.conversation === input.conversation
           && this.participant(row.sender).kind === 'ai').length
         if (used >= conversation.maxAiMessages) throw new Error('IM conversation AI message budget exhausted')
@@ -201,48 +202,50 @@ export class ImService {
   }
 
   /**
-   * Add one same-platform identity to a human's private contact list; this grants no AI communication permission.
-   * @param human - externally authenticated contact-list owner.
+   * Add a mutual same-platform contact, granting communication in both directions.
+   * @param human - externally authenticated same-platform administrator.
+   * @param ownerId - human or AI contact-list owner.
    * @param contact - existing human or AI identity.
    * @returns after durable insertion; repeats are idempotent.
    */
   addContact(human: ParticipantId, ownerId: ParticipantId, contact: ParticipantId): Promise<void> {
     return this.mutate(async () => {
-      const owner = this.participant(ownerId)
-      if (this.participant(human).kind !== 'human' || this.participant(human).namespace !== owner.namespace
-        || ownerId === contact || owner.namespace !== this.participant(contact).namespace) throw new Error('IM contacts require external human administration and distinct same-platform participants')
-      const table = this.domain.table('contacts')
-      const current = table.get(ownerId)?.contacts ?? []
-      if (!current.includes(contact)) await table.put(ownerId, { owner: ownerId, contacts: [...current, contact] })
+      this.validateAuthorization(human, {
+        id: authorizationIdSchema.parse(randomUUID()), from: ownerId, to: contact,
+      })
+      await addMutualContact(this.domain, ownerId, contact)
     })
   }
 
   /**
-   * Remove a private contact without removing conversation membership or authorization.
-   * @param human - externally authenticated human list owner.
+   * Remove a mutual contact and revoke communication in both directions without removing conversation membership.
+   * @param human - externally authenticated same-platform administrator.
+   * @param ownerId - human or AI contact-list owner.
    * @param contact - identity to remove.
    * @returns after durable removal; absent contacts are ignored.
    */
   removeContact(human: ParticipantId, ownerId: ParticipantId, contact: ParticipantId): Promise<void> {
     return this.mutate(async () => {
-      if (this.participant(human).kind !== 'human') throw new Error('IM contacts require a human owner')
-      const table = this.domain.table('contacts')
-      if (this.participant(human).namespace !== this.participant(ownerId).namespace) throw new Error('IM contact administrator belongs to another namespace')
-      const current = table.get(ownerId)
-      if (current?.contacts.includes(contact)) {
-        await table.put(ownerId, { owner: ownerId, contacts: current.contacts.filter(id => id !== contact) })
-      }
+      const relation = this.findRelationship(ownerId, contact)
+      if (relation === undefined) return
+      this.validateAuthorization(human, relation)
+      const table = this.domain.table('authorizations')
+      await table.delete(relation.id)
     })
   }
 
   /**
-   * Read an authenticated human's private contact list.
-   * @param human - externally authenticated list owner.
+   * Read a human or AI participant's private contact list.
+   * @param owner - list owner selected by the authenticated caller or bound Agent.
    * @returns owned participant copies; contacts do not imply group membership.
    */
-  contacts(human: ParticipantId): Participant[] {
-    this.participant(human)
-    return (this.domain.table('contacts').get(human)?.contacts ?? []).map(id => this.participant(id))
+  contacts(owner: ParticipantId): Participant[] {
+    this.participant(owner)
+    return [...this.domain.table('authorizations').entries()].flatMap(([, relation]) => {
+      if (relation.from === owner) return [this.participant(relation.to)]
+      if (relation.to === owner) return [this.participant(relation.from)]
+      return []
+    })
   }
 
   /**
@@ -289,42 +292,44 @@ export class ImService {
       if (group === undefined) throw new Error('IM conversation is missing')
       if (group.kind !== 'group' || (actor !== member && actor !== group.owner)) throw new Error('IM group owner required')
       if (member === group.owner || group.members.length <= 2) throw new Error('IM group must retain its owner and two members')
-      for (const [key, authorization] of this.domain.table('authorizations').entries()) {
-        if (authorization.conversation === id && (authorization.from === member || authorization.to === member)) await this.domain.table('authorizations').delete(key)
-      }
       await this.domain.table('conversations').put(id, { ...group, members: group.members.filter(value => value !== member) })
     })
   }
 
   /**
-   * Grant AI communication permission. Only externally authenticated human members can administer it.
+   * Create a contact relationship. Only externally authenticated humans can administer it.
    * @param human - human identity authenticated by the external caller.
-   * @param authorization - two AI members and the permitted direction.
+   * @param authorization - the two participants in a mutual contact relationship.
    * @returns after durable creation; duplicate authorization ids reject.
    */
   grantAuthorization(human: ParticipantId, authorization: Authorization): Promise<void> {
     return this.mutate(async () => {
       this.validateAuthorization(human, authorization)
       const table = this.domain.table('authorizations')
-      if (table.get(authorization.id) !== undefined) throw new Error('IM authorization already exists')
+      if (table.get(authorization.id) !== undefined || this.findRelationship(authorization.from, authorization.to) !== undefined) {
+        throw new Error('IM contact relationship already exists')
+      }
       await table.put(authorization.id, structuredClone(authorization))
     })
   }
 
   /**
-   * Replace the endpoints or direction of an existing authorization in its original conversation.
+   * Replace the endpoints of a mutual contact relationship.
    * @param human - externally authenticated human member.
    * @param id - existing authorization identity.
-   * @param changes - complete new endpoints and direction.
+   * @param changes - both new contact endpoints.
    * @returns after durable replacement; subsequent sends use the replacement.
    */
-  updateAuthorization(human: ParticipantId, id: AuthorizationId, changes: Pick<Authorization, 'from' | 'to' | 'direction'>): Promise<void> {
+  updateAuthorization(human: ParticipantId, id: AuthorizationId, changes: Pick<Authorization, 'from' | 'to'>): Promise<void> {
     return this.mutate(async () => {
       const table = this.domain.table('authorizations')
       const prior = table.get(id)
       if (prior === undefined) throw new Error('IM authorization not found')
       const updated = { ...prior, ...structuredClone(changes) }
+      this.validateAuthorization(human, prior)
       this.validateAuthorization(human, updated)
+      const existing = this.findRelationship(updated.from, updated.to)
+      if (existing !== undefined && existing.id !== id) throw new Error('IM contact relationship already exists')
       await table.put(id, updated)
     })
   }
@@ -333,7 +338,7 @@ export class ImService {
    * Remove one permission without retracting messages already committed under it.
    * @param human - externally authenticated human member.
    * @param id - existing authorization identity.
-   * @returns after durable removal; subsequent sends require another applicable grant.
+   * @returns after durable removal; both endpoints lose this contact relationship.
    */
   revokeAuthorization(human: ParticipantId, id: AuthorizationId): Promise<void> {
     return this.mutate(async () => {
@@ -365,6 +370,58 @@ export class ImService {
       receiver.lifetime.abort()
       await receiver.tail
     }
+  }
+
+  /**
+   * Register an AI across its joined conversations, including groups joined after registration.
+   * @param recipient - bound AI identity.
+   * @param receive - inbox admission callback.
+   * @returns a disposer that drains pending admissions.
+   */
+  registerParticipant(recipient: ParticipantId, receive: MessageReceiver): () => Promise<void> {
+    if (this.participant(recipient).kind !== 'ai') throw new Error('IM participant receiver requires an AI')
+    if (this.closed) throw new Error('IM service is closed')
+    const key = JSON.stringify([recipient])
+    if (this.receivers.has(key)) throw new Error('IM participant already registered')
+    const receiver: Receiver = { receive, lifetime: new AbortController(), tail: Promise.resolve(), scheduled: new Set() }
+    this.receivers.set(key, receiver)
+    for (const message of this.inbox(recipient)) this.schedule(message, recipient)
+    return async () => {
+      if (this.receivers.get(key) === receiver) this.receivers.delete(key)
+      receiver.lifetime.abort()
+      await receiver.tail
+    }
+  }
+
+  /**
+   * Read the AI's persisted page selection; new identities start with no open page.
+   * @param participant - AI whose page is selected by the authenticated binding.
+   * @returns an owned page value.
+   */
+  agentPage(participant: ParticipantId): AgentPage {
+    if (this.participant(participant).kind !== 'ai') throw new Error('IM page requires an AI')
+    return structuredClone(this.domain.table('pages').get(participant) ?? { kind: 'none' })
+  }
+
+  /**
+   * Select or leave an AI page; only unread messages on the selected page are admitted as content.
+   * @param participant - bound AI identity.
+   * @param page - joined group, mutual contact, or no page.
+   * @returns after durable selection and scheduling of pending page messages.
+   */
+  async setAgentPage(participant: ParticipantId, page: AgentPage): Promise<void> {
+    await this.mutate(async () => {
+      this.agentPage(participant)
+      if (page.kind === 'group') {
+        this.requireMember(page.id, participant)
+        if (this.domain.table('conversations').get(page.id)?.kind !== 'group') throw new Error('IM group page required')
+      } else if (page.kind === 'contact' && !this.contacts(participant).some(contact => contact.id === page.id)) {
+        throw new Error('IM contact page requires a mutual contact')
+      }
+      await this.domain.table('pages').put(participant, structuredClone(page))
+    })
+    await this.receivers.get(JSON.stringify([participant]))?.tail
+    for (const message of this.inbox(participant)) this.schedule(message, participant)
   }
 
   /**
@@ -401,10 +458,10 @@ export class ImService {
 
   private validateAuthorization(human: ParticipantId, authorization: Authorization): void {
     if (this.participant(human).kind !== 'human') throw new Error('IM authorization requires an external human')
-    if (this.domain.table('conversations').get(authorization.conversation)?.owner !== human) throw new Error('IM authorization requires the conversation owner')
-    for (const member of [authorization.from, authorization.to]) {
-      this.requireMember(authorization.conversation, member)
-      if (this.participant(member).kind !== 'ai') throw new Error('IM authorization endpoints must be AI participants')
+    const from = this.participant(authorization.from)
+    const to = this.participant(authorization.to)
+    if (from.namespace !== to.namespace || this.participant(human).namespace !== from.namespace) {
+      throw new Error('IM contact administrator and endpoints must share a namespace')
     }
     if (authorization.from === authorization.to) throw new Error('IM authorization endpoints must differ')
   }
@@ -443,10 +500,9 @@ export class ImService {
    */
   setAgentBinding(binding: AgentBinding): Promise<void> {
     return this.mutate(async () => {
-      this.requireMember(binding.conversation, binding.participant)
       if (this.participant(binding.participant).kind !== 'ai') throw new Error('IM binding requires an AI')
       const table = this.domain.table('bindings')
-      const key = JSON.stringify([binding.conversation, binding.participant])
+      const key = JSON.stringify([binding.participant])
       const prior = table.get(key)
       if (prior !== undefined && prior.sessionId !== binding.sessionId) throw new Error('IM Agent Session identity cannot change')
       await table.put(key, structuredClone(binding))
@@ -487,9 +543,9 @@ export class ImService {
     })
   }
 
-  private isAuthorized(conversation: ConversationId, from: ParticipantId, to: ParticipantId): boolean {
-    return [...this.domain.table('authorizations').entries()].some(([, grant]) => grant.conversation === conversation
-      && ((grant.from === from && grant.to === to) || (grant.direction === 'two-way' && grant.from === to && grant.to === from)))
+  private findRelationship(from: ParticipantId, to: ParticipantId): Authorization | undefined {
+    return [...this.domain.table('authorizations').entries()].find(([, relation]) =>
+      (relation.from === from && relation.to === to) || (relation.from === to && relation.to === from))?.[1]
   }
 
   private requireGroupOwner(id: ConversationId, human: ParticipantId): Conversation {
@@ -510,6 +566,7 @@ export class ImService {
   private schedule(message: ImMessage, recipient: ParticipantId): void {
     if (this.closed || !['pending', 'queued'].includes(message.deliveries[recipient] ?? '')) return
     const receiver = this.receivers.get(JSON.stringify([message.conversation, recipient]))
+      ?? this.receivers.get(JSON.stringify([recipient]))
     if (receiver === undefined || receiver.scheduled.has(message.id)) return
     receiver.scheduled.add(message.id)
     receiver.tail = receiver.tail.then(async () => {
@@ -539,7 +596,44 @@ export class ImService {
  * @returns after durable records load and the service becomes available.
  */
 export async function apply(ctx: Context, config: Config): Promise<void> {
-  const service = new ImService(await ctx.storageDomain.open(imDomain), config, () => { ctx.logger.warn('IM delivery acknowledgement could not be persisted') })
+  const domain = await ctx.storageDomain.open(imDomain)
+  const service = new ImService(domain, config, () => { ctx.logger.warn('IM delivery acknowledgement could not be persisted') })
   ctx.effect(() => () => service.close())
+  await restoreContactRelationships(domain)
   ctx.provide('im', service)
+}
+
+
+async function addMutualContact(domain: Domain<typeof imDomain>, from: ParticipantId, to: ParticipantId): Promise<void> {
+  const table = domain.table('authorizations')
+  const relation = [...table.entries()].find(([, value]) =>
+    (value.from === from && value.to === to) || (value.from === to && value.to === from))?.[1]
+  if (relation === undefined) {
+    const id = authorizationIdSchema.parse(randomUUID())
+    await table.put(id, { id, from, to })
+  }
+}
+
+/** Fold draft contact lists and overlapping conversation grants into one relationship per pair before admission. */
+async function restoreContactRelationships(domain: Domain<typeof imDomain>): Promise<void> {
+  const table = domain.table('authorizations')
+  const pairs = new Map<string, Authorization>()
+  for (const [id, relation] of table.entries()) {
+    const key = JSON.stringify([relation.from, relation.to].sort())
+    const prior = pairs.get(key)
+    if (prior === undefined) { pairs.set(key, relation); continue }
+    await table.delete(id)
+  }
+  const bindings = domain.table('bindings')
+  for (const [key, binding] of bindings.entries()) {
+    const identityKey = JSON.stringify([binding.participant])
+    if (key === identityKey) continue
+    if (bindings.get(identityKey) === undefined) await bindings.put(identityKey, binding)
+    await bindings.delete(key)
+  }
+  const legacy = domain.table('contacts')
+  for (const [owner, record] of legacy.entries()) {
+    for (const contact of record.contacts) await addMutualContact(domain, owner, contact)
+    await legacy.delete(owner)
+  }
 }

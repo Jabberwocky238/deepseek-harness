@@ -8,5 +8,6 @@
         allowedUsers: !!js (process.env.WECOM_ALLOWED_USERS || '').split(',').map(value => value.trim()).filter(Boolean)
         workspacePath: !!js process.cwd()
         agentPreset: standard
+        imMaxAiMessages: 1000
         permissionPreset: workspace-write
         language: zh

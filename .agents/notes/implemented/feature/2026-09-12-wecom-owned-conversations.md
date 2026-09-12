@@ -18,13 +18,15 @@ Native HTTP downloads enforce a byte budget and cancellation before SDK decrypti
 
 Message ids remain pending until processing settles, then enter a bounded completed-id set. Reply failure never reruns a task. Session persistence owns Agent logs, while conversation mappings and deduplication remain process-local. Plugin unload stops admission, disconnects the transport, disposes owned Agents, and drains queued work.
 
+Opt-in IM tools bind to the same bot/user or bot/group/user ownership. Separate durable namespaces prevent one Agent from discovering another user’s contacts or conversations. An explicit, matching `imBotContacts` roster shares a namespace only among the listed bots for that same user and chat. Stable bot-specific identities retain separate human conversations; mutual contacts and a shared AI direct chat permit explicit cross-bot messaging without exposing unrelated users. Each incoming WeCom callback selects its authenticated human or group page before model input. The IM service owns publication records and delivery status; the SDK sends admitted `talk` text and media to the authenticated callback’s destination. Agent effects own tools and outbound receivers. Ordinary streaming replies stay outside the IM outbox. The per-conversation publication budget survives reload; changing an existing budget requires updating its stored conversation.
+
 ## Alternatives considered
 
 **Reuse the webhook runtime.** Its fire-and-forget semantics do not provide multi-turn ownership or completion replies. Extending it for chat would change an unrelated public responsibility.
 
 **Share one Agent across a group.** That lets one member read another member’s conversational context. Per-member histories provide explicit isolation while retaining the deployment’s shared workspace.
 
-**Persist mappings and an outbox immediately.** Durable replay and delivery introduce separate transaction and retry guarantees. The first implementation instead states its restart and delivery limits explicitly.
+**Persist mappings and an outbox immediately.** Durable replay and delivery introduce separate transaction and retry guarantees. Ordinary replies state their restart and delivery limits explicitly; opt-in IM publications use the existing IM store.
 
 ## Consequences
 

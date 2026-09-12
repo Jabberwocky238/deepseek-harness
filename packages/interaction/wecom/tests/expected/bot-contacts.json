@@ -1,0 +1,136 @@
+{
+  "one": {
+    "self": {
+      "id": "wecom:29d07268b205d99c82c4078b08ad98450c685c857b9bd60688b98707f17c6eaa:agent:b6b06eb42b57b0208da937cde90d11eaa43b14a342f834a65310b899a281cd2c",
+      "kind": "ai",
+      "name": "Agent One",
+      "namespace": "wecom:29d07268b205d99c82c4078b08ad98450c685c857b9bd60688b98707f17c6eaa"
+    },
+    "page": {
+      "kind": "contact",
+      "id": "wecom:29d07268b205d99c82c4078b08ad98450c685c857b9bd60688b98707f17c6eaa:user"
+    },
+    "unread": [],
+    "contacts": [
+      {
+        "id": "wecom:29d07268b205d99c82c4078b08ad98450c685c857b9bd60688b98707f17c6eaa:agent:ca814b406b791bcc6a5231ebba0fdaafd0c196fcfb28880f479f97735b70df3f",
+        "kind": "ai",
+        "name": "Agent Two",
+        "namespace": "wecom:29d07268b205d99c82c4078b08ad98450c685c857b9bd60688b98707f17c6eaa"
+      },
+      {
+        "id": "wecom:29d07268b205d99c82c4078b08ad98450c685c857b9bd60688b98707f17c6eaa:user",
+        "kind": "human",
+        "name": "alice",
+        "namespace": "wecom:29d07268b205d99c82c4078b08ad98450c685c857b9bd60688b98707f17c6eaa"
+      }
+    ],
+    "conversations": [
+      {
+        "id": "wecom:29d07268b205d99c82c4078b08ad98450c685c857b9bd60688b98707f17c6eaa:contacts:153c7091d5c2dce80c31fb24824d9ca600c2fe1445571433189916fc3bc7e120",
+        "name": "WeCom Agent contacts",
+        "kind": "direct",
+        "members": [
+          {
+            "id": "wecom:29d07268b205d99c82c4078b08ad98450c685c857b9bd60688b98707f17c6eaa:agent:b6b06eb42b57b0208da937cde90d11eaa43b14a342f834a65310b899a281cd2c",
+            "kind": "ai",
+            "name": "Agent One",
+            "namespace": "wecom:29d07268b205d99c82c4078b08ad98450c685c857b9bd60688b98707f17c6eaa"
+          },
+          {
+            "id": "wecom:29d07268b205d99c82c4078b08ad98450c685c857b9bd60688b98707f17c6eaa:agent:ca814b406b791bcc6a5231ebba0fdaafd0c196fcfb28880f479f97735b70df3f",
+            "kind": "ai",
+            "name": "Agent Two",
+            "namespace": "wecom:29d07268b205d99c82c4078b08ad98450c685c857b9bd60688b98707f17c6eaa"
+          }
+        ]
+      },
+      {
+        "id": "wecom:29d07268b205d99c82c4078b08ad98450c685c857b9bd60688b98707f17c6eaa:conversation:b6b06eb42b57b0208da937cde90d11eaa43b14a342f834a65310b899a281cd2c",
+        "name": "WeCom conversation",
+        "kind": "direct",
+        "members": [
+          {
+            "id": "wecom:29d07268b205d99c82c4078b08ad98450c685c857b9bd60688b98707f17c6eaa:user",
+            "kind": "human",
+            "name": "alice",
+            "namespace": "wecom:29d07268b205d99c82c4078b08ad98450c685c857b9bd60688b98707f17c6eaa"
+          },
+          {
+            "id": "wecom:29d07268b205d99c82c4078b08ad98450c685c857b9bd60688b98707f17c6eaa:agent:b6b06eb42b57b0208da937cde90d11eaa43b14a342f834a65310b899a281cd2c",
+            "kind": "ai",
+            "name": "Agent One",
+            "namespace": "wecom:29d07268b205d99c82c4078b08ad98450c685c857b9bd60688b98707f17c6eaa"
+          }
+        ]
+      }
+    ]
+  },
+  "two": {
+    "self": {
+      "id": "wecom:29d07268b205d99c82c4078b08ad98450c685c857b9bd60688b98707f17c6eaa:agent:ca814b406b791bcc6a5231ebba0fdaafd0c196fcfb28880f479f97735b70df3f",
+      "kind": "ai",
+      "name": "Agent Two",
+      "namespace": "wecom:29d07268b205d99c82c4078b08ad98450c685c857b9bd60688b98707f17c6eaa"
+    },
+    "page": {
+      "kind": "contact",
+      "id": "wecom:29d07268b205d99c82c4078b08ad98450c685c857b9bd60688b98707f17c6eaa:user"
+    },
+    "unread": [],
+    "contacts": [
+      {
+        "id": "wecom:29d07268b205d99c82c4078b08ad98450c685c857b9bd60688b98707f17c6eaa:agent:b6b06eb42b57b0208da937cde90d11eaa43b14a342f834a65310b899a281cd2c",
+        "kind": "ai",
+        "name": "Agent One",
+        "namespace": "wecom:29d07268b205d99c82c4078b08ad98450c685c857b9bd60688b98707f17c6eaa"
+      },
+      {
+        "id": "wecom:29d07268b205d99c82c4078b08ad98450c685c857b9bd60688b98707f17c6eaa:user",
+        "kind": "human",
+        "name": "alice",
+        "namespace": "wecom:29d07268b205d99c82c4078b08ad98450c685c857b9bd60688b98707f17c6eaa"
+      }
+    ],
+    "conversations": [
+      {
+        "id": "wecom:29d07268b205d99c82c4078b08ad98450c685c857b9bd60688b98707f17c6eaa:contacts:153c7091d5c2dce80c31fb24824d9ca600c2fe1445571433189916fc3bc7e120",
+        "name": "WeCom Agent contacts",
+        "kind": "direct",
+        "members": [
+          {
+            "id": "wecom:29d07268b205d99c82c4078b08ad98450c685c857b9bd60688b98707f17c6eaa:agent:b6b06eb42b57b0208da937cde90d11eaa43b14a342f834a65310b899a281cd2c",
+            "kind": "ai",
+            "name": "Agent One",
+            "namespace": "wecom:29d07268b205d99c82c4078b08ad98450c685c857b9bd60688b98707f17c6eaa"
+          },
+          {
+            "id": "wecom:29d07268b205d99c82c4078b08ad98450c685c857b9bd60688b98707f17c6eaa:agent:ca814b406b791bcc6a5231ebba0fdaafd0c196fcfb28880f479f97735b70df3f",
+            "kind": "ai",
+            "name": "Agent Two",
+            "namespace": "wecom:29d07268b205d99c82c4078b08ad98450c685c857b9bd60688b98707f17c6eaa"
+          }
+        ]
+      },
+      {
+        "id": "wecom:29d07268b205d99c82c4078b08ad98450c685c857b9bd60688b98707f17c6eaa:conversation:ca814b406b791bcc6a5231ebba0fdaafd0c196fcfb28880f479f97735b70df3f",
+        "name": "WeCom conversation",
+        "kind": "direct",
+        "members": [
+          {
+            "id": "wecom:29d07268b205d99c82c4078b08ad98450c685c857b9bd60688b98707f17c6eaa:user",
+            "kind": "human",
+            "name": "alice",
+            "namespace": "wecom:29d07268b205d99c82c4078b08ad98450c685c857b9bd60688b98707f17c6eaa"
+          },
+          {
+            "id": "wecom:29d07268b205d99c82c4078b08ad98450c685c857b9bd60688b98707f17c6eaa:agent:ca814b406b791bcc6a5231ebba0fdaafd0c196fcfb28880f479f97735b70df3f",
+            "kind": "ai",
+            "name": "Agent Two",
+            "namespace": "wecom:29d07268b205d99c82c4078b08ad98450c685c857b9bd60688b98707f17c6eaa"
+          }
+        ]
+      }
+    ]
+  }
+}

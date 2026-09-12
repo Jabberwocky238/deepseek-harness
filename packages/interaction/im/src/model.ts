@@ -6,7 +6,7 @@ import { defineDomain, domainTable } from '@deepseek-ai/dsh-storage-domain'
 import type { AttachmentId } from '@deepseek-ai/dsh-attachment'
 import { SessionId } from '@deepseek-ai/dsh-session'
 
-import type { ParticipantId, ConversationId, ImMessageId, AuthorizationId, Participant, Conversation, Authorization, ImMessage, AgentBinding, ImAttachment } from './types.ts'
+import type { ParticipantId, ConversationId, ImMessageId, AuthorizationId, Participant, Conversation, Authorization, ImMessage, AgentBinding, ImAttachment, AgentPage } from './types.ts'
 export type * from './types.ts'
 
 /** Validates participant identifiers at transport and durable reads. */
@@ -30,7 +30,7 @@ const conversationSchema = z.object({
 })
 const contactSchema = z.object({ owner: participantIdSchema, contacts: z.array(participantIdSchema) })
 const bindingSchema = z.object({
-  conversation: conversationIdSchema, participant: participantIdSchema,
+  participant: participantIdSchema,
   sessionId: z.string().transform(SessionId), enabled: z.boolean(),
 })
 const attachmentId = z.string().min(1).transform(value => brandString<AttachmentId>(value))
@@ -48,10 +48,8 @@ export const imAttachmentSchema: z.ZodType<ImAttachment> = z.discriminatedUnion(
 ])
 const authorizationSchema = z.object({
   id: authorizationIdSchema,
-  conversation: conversationIdSchema,
   from: participantIdSchema,
   to: participantIdSchema,
-  direction: z.enum(['one-way', 'two-way']),
 })
 const messageSchema = z.object({
   id: imMessageIdSchema,
@@ -65,6 +63,13 @@ const messageSchema = z.object({
   deliveries: z.record(z.string(), z.enum(['pending', 'queued', 'accepted', 'failed'])),
 })
 
+/** Validated page selection persisted independently of message delivery. */
+export const agentPageSchema = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('none') }),
+  z.object({ kind: z.literal('group'), id: conversationIdSchema }),
+  z.object({ kind: z.literal('contact'), id: participantIdSchema }),
+])
+
 /** The storage owner of IM membership, history, and pending delivery. */
 export const imDomain = defineDomain({
   name: 'im', version: 1,
@@ -73,6 +78,7 @@ export const imDomain = defineDomain({
     conversations: domainTable<ConversationId, Conversation>(conversationSchema),
     authorizations: domainTable<AuthorizationId, Authorization>(authorizationSchema),
     contacts: domainTable<ParticipantId, z.infer<typeof contactSchema>>(contactSchema),
+    pages: domainTable<ParticipantId, AgentPage>(agentPageSchema),
     bindings: domainTable<string, AgentBinding>(bindingSchema),
     messages: domainTable<ImMessageId, ImMessage>(messageSchema),
   },

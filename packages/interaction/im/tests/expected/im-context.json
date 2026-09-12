@@ -1,0 +1,6 @@
+[
+  {
+    "type": "text",
+    "text": "{\"self\":{\"id\":\"alice\",\"kind\":\"ai\",\"name\":\"alice\",\"namespace\":\"im\"},\"page\":{\"kind\":\"none\"},\"unread\":[],\"contacts\":[{\"id\":\"bob\",\"kind\":\"ai\",\"name\":\"bob\",\"namespace\":\"im\"}],\"conversations\":[{\"id\":\"room\",\"name\":\"Room\",\"kind\":\"group\",\"members\":[{\"id\":\"human\",\"kind\":\"human\",\"name\":\"human\",\"namespace\":\"im\"},{\"id\":\"other\",\"kind\":\"human\",\"name\":\"other\",\"namespace\":\"im\"},{\"id\":\"alice\",\"kind\":\"ai\",\"name\":\"alice\",\"namespace\":\"im\"},{\"id\":\"bob\",\"kind\":\"ai\",\"name\":\"bob\",\"namespace\":\"im\"}]}]}"
+  }
+]

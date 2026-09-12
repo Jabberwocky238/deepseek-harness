@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-09-12-wecom-owned-conversations.md
-2026-09-12-wecom-owned-conversations.md: bfba0bbaa4856b81380e2316f51d5cf05e0cf6c6
-2026-09-12-wecom-owned-conversations.zh.md: d503ebde67a46c08604dd2f622d55e119b0823f9
+2026-09-12-wecom-owned-conversations.md: f581d84ac790f5a8404fd0dc03c863e53411c204
+2026-09-12-wecom-owned-conversations.zh.md: adb8fc5c22852776bd21a34fe54a342cbf8e7c99

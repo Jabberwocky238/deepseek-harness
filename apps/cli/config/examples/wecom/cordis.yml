@@ -1,4 +1,14 @@
 - insert:
+    - id: wecom-im
+      name: '@deepseek-ai/dsh-im'
+      config:
+        maxParticipants: 1000
+        maxConversations: 500
+        maxMessages: 100000
+        maxTextBytes: 16384
+        maxAttachmentBytes: 20971520
+        maxAttachments: 20
+
     - id: wecom
       name: '@deepseek-ai/dsh-wecom'
       config:
@@ -8,5 +18,6 @@
         allowedUsers: !!js (process.env.WECOM_ALLOWED_USERS || '').split(',').map(value => value.trim()).filter(Boolean)
         workspacePath: !!js process.cwd()
         agentPreset: standard
+        imMaxAiMessages: 1000
         permissionPreset: workspace-write
         language: zh

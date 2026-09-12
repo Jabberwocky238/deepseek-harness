@@ -22,6 +22,8 @@ To run a second bot in the same process, set `WECOM_BOT_2_ID` and `WECOM_BOT_2_S
 pnpm dsh web --patch ./apps/cli/config/examples/wecom/cordis.yml --patch ./apps/cli/config/examples/wecom/second-bot.cordis.yml --no-open
 ```
 
+The overlays also enable `im_context` for private identity and contact discovery and `talk` for sending text, images, and files to the current chat. Ask the bot to call `im_context` to inspect its identity, or to use `talk` to send a message. These identities do not expose other users’ chats. To make selected bots mutual contacts, configure the same `imBotContacts` list of bot IDs and names on both rows. The list must include each row’s own bot. After messaging both bots as the same user, ask each to call `im_context`; its contacts include the other Agent and its conversations include their shared private chat. [IM configuration and delivery limits](../../../packages/interaction/wecom/README.md#use-this-package) apply.
+
 The bot uses the `standard` Agent preset and `workspace-write` permission preset. It has no WeCom approval interface, so operations requiring approval depend on the composed answerers. Choose the workspace and allowed users before connecting.
 
 Send text, an image, or a file in a direct conversation, or invoke the bot in a group. Mixed text and images retain their order. Image understanding requires a vision-capable model; files are saved for the Agent’s file tools, and follow-up text can specify what to do with them. The bot first shows a processing status, updates the same reply as text is generated, and ends it when Agent activity settles. Follow-up text retains context while the plugin runs; each group member has separate history. A plugin reload starts fresh conversations.

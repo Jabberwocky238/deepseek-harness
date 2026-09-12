@@ -34,6 +34,8 @@ Image and file downloads share a per-message byte budget and an admission deadli
 
 Input text and complete replies have UTF-8 byte limits. Oversized input is rejected; oversized replies end with an ellipsis within the limit. A timed-out task is cancelled and drained before a timeout reply. Failed tasks return a fixed status without exposing internal error details.
 
+Mount IM storage and set `imMaxAiMessages` to enable `im_context` and `talk`; omission leaves them disabled. The example overlays enable both tools. Without a contact roster, each bot, user, and group/user conversation gets isolated IM identities and contacts. Set identical `imBotContacts` rosters on selected bots, including every bot’s ID and stable display name, to make their Agents mutual contacts for the same user and chat. An empty roster keeps bots separate. Each Agent retains its own human chat and can discover a shared AI chat through `im_context`; `talk` selects it by conversation ID. The peer starts receiving when that user has messaged its bot. Other users and groups remain separate. `talk` stores its message before sending Markdown, images, or files to the originating WeCom chat. Its result confirms durable admission, not recipient delivery. Failed deliveries remain in IM storage for explicit retry; a partially delivered message can duplicate earlier parts on retry. The budget survives restart and must match the stored conversation configuration.
+
 <a id="understand-the-implementation"></a>
 ## Understand the implementation
 
@@ -55,11 +57,11 @@ No runtime invariant companion is published: the plugin owns no independently ex
 
 #### What the model sees
 
-Each admitted callback contributes ordered content as a logged `user/message`. Text preserves `text.content`; images and files become durable `image` and `file` references. Vision-capable models receive image input. File references become [readable file handles](../../llm/llm/README.md) through the existing request projection and file tools. The plugin adds no system prompt or tool definitions. Bot secrets, attachment URLs and decryption keys, callback headers, and unconsumed payload fields are not included in model input.
+Each admitted callback contributes ordered content as a logged `user/message`. Text preserves `text.content`; images and files become durable `image` and `file` references. Vision-capable models receive image input. File references become [readable file handles](../../llm/llm/README.md) through the existing request projection and file tools. The plugin adds no system prompt. Enabled IM tools add schemas and logged discovery or messaging results. Bot secrets, attachment URLs and decryption keys, callback headers, and unconsumed payload fields are not included in model input.
 
 #### Token effect
 
-Accepted text, image input, file handles, and accumulated conversation history consume context tokens; rejected or duplicate callbacks create no model request.
+Accepted text, image input, file handles, enabled IM tool schemas and results, and accumulated conversation history consume context tokens; rejected or duplicate callbacks create no model request.
 
 #### KV Cache effect
 
@@ -72,7 +74,7 @@ Ordinary follow-ups append to the existing Session. Preset and model providers o
 - Conversation mappings and bounded completed-message deduplication are process-local. Reload starts fresh conversations; mounted Session persistence can retain their logs but does not restore these mappings.
 - Voice, video, quoted payloads, interactive cards, and WeCom approval answers are not implemented. Files use the existing file tools; this plugin does not itself extract PDF or Office document text.
 - Conversation and pending-message caps bound live work. Reaching the conversation cap requires a reload to admit new conversations. Saturation can drop additional callbacks without a reply.
-- A failed update is logged without rerunning the Agent or retrying that update; subsequent text and the final update are still attempted. There is no durable outbox or exactly-once delivery guarantee.
+- A failed update is logged without rerunning the Agent or retrying that update; subsequent text and the final update are still attempted. Streaming replies have no durable outbox or exactly-once delivery guarantee.
 - All conversations share the configured working directory and capabilities. Separate history does not isolate filesystem changes.
 - Live WeCom authentication and delivery require deployment credentials; local tests use a loopback WeCom server and a scripted model.
 

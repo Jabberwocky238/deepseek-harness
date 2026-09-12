@@ -510,7 +510,7 @@ describe('WeCom through Loader and a real WebSocket', () => {
     [{ agentPreset: 'standard' }, 'agent-presets'],
     [{ wsUrl: 'ws://example.com' }, 'wsUrl'],
     [{ wsUrl: 'wss://user:secret@example.com' }, 'wsUrl'],
-  ] as const)('rejects invalid deployment configuration %#', async (config, diagnostic) => {
+  ] satisfies [Partial<Wecom.Config>, string][])('rejects invalid deployment configuration %#', async (config, diagnostic) => {
     await expect(harness(config)).rejects.toThrow(new RegExp(diagnostic, 'i'))
   })
 

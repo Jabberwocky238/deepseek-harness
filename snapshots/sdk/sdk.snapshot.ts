@@ -61,6 +61,7 @@ import {
   type SdkPromptContentBlock,
 } from '@deepseek-ai/dsh-sdk-client'
 import { SESSION_FORMAT_VERSION } from '@deepseek-ai/dsh-session'
+import { createWecomPeer } from './wecom.ts'
 
 const corpusRoot = fileURLToPath(new URL('../', import.meta.url))
 
@@ -562,6 +563,12 @@ async function runScenario(scenario: CorpusScenario): Promise<{
     ignoredRootEntries: RUNTIME_WORKSPACE_ENTRIES,
   })
   const [parentFixture, ...childFixtures] = replayFixtures
+  const wecomMedia = scenario.name === 'wecom-image'
+    ? { kind: 'image' as const, data: Buffer.from(scenario.manifest.input!.attachments![0]!.data, 'base64') }
+    : scenario.name === 'wecom-file'
+      ? { kind: 'file' as const, data: await readFile(join(scenario.dir, 'workspace', 'attachment.txt')) }
+      : undefined
+  await using wecom = scenario.name.startsWith('wecom-') ? await createWecomPeer(wecomMedia) : undefined
   const env: Record<string, string> = {
     ...Object.fromEntries(Object.entries(process.env).filter(([, value]) => value !== undefined)) as Record<string, string>,
     DSH_SNAPSHOT: mode,
@@ -580,6 +587,7 @@ async function runScenario(scenario: CorpusScenario): Promise<{
     ...scenario.manifest.environment,
     ...assertions.environment,
     ...childEnvironment,
+    ...wecom === undefined ? {} : { WECOM_SNAPSHOT_URL: wecom.url, WECOM_BOT_SECRET: 'snapshot-secret' },
   }
 
   const harness = new DeepSeekHarness({
@@ -611,6 +619,18 @@ async function runScenario(scenario: CorpusScenario): Promise<{
     try {
       const session = harness.session(sessionId)
       for (const action of turnActions(primaryFixture)) {
+        if (wecom !== undefined) {
+          if (action.content === undefined) throw new Error('WeCom snapshot requires user text for every turn')
+          const text = action.content.filter(block => block.type === 'text').map((block) => {
+            if (typeof block.text !== 'string') throw new Error('WeCom snapshot requires text input')
+            return block.text
+          }).join('')
+          expect(await wecom.send(text)).toBe('SDK snapshot OK')
+          expect(wecom.updates[0]).toMatchObject({ content: '正在处理中…', finish: false })
+          expect(wecom.updates.at(-1)).toMatchObject({ content: 'SDK snapshot OK', finish: true })
+          expect(new Set(wecom.updates.map(update => update.id)).size).toBe(1)
+          continue
+        }
         if (action.content === undefined) {
           await waitForRootEvent(
             subscription,

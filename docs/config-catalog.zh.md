@@ -3410,6 +3410,64 @@ export interface Config {
 
 来源：[`packages/webhook/webhook-github/src/index.ts:17`](../packages/webhook/webhook-github/src/index.ts)
 
+<a id="deepseek-aidsh-wecom"></a>
+
+## `@deepseek-ai/dsh-wecom`
+
+需要： `agents` · `sessions` · `credentials` · `agentDefaultModel` · `permissionPresets` · `attachments`
+
+```ts config-catalog
+/** Connection, admission, and Agent settings for one WeCom bot. */
+export interface Config {
+  /** Bot identifier issued by WeCom. */
+  botId: string
+  /** Credential reference containing the bot secret. */
+  secretEnv: string
+  /** Exact WeCom user ids allowed to invoke the Agent; "*" allows everyone and an empty list denies everyone. */
+  allowedUsers: string[]
+  /** Existing absolute working directory shared by this bot's Agents. */
+  workspacePath: string
+  /** Permission preset applied before the first input is admitted. */
+  permissionPreset: string
+  /** Optional Agent preset; omission uses globally mounted capabilities. */
+  agentPreset?: string
+  /** WeCom endpoint; unencrypted connections are permitted only on loopback. */
+  wsUrl: string
+  /** Maximum retained conversations until plugin reload. */
+  maxConversations: number
+  /** Maximum accepted messages across active and queued work. */
+  maxPendingMessages: number
+  /** Number of completed message ids retained for process-local deduplication. */
+  maxRecentMessages: number
+  /** Maximum UTF-8 input bytes admitted to the Agent. */
+  maxInputBytes: number
+  /** Maximum total decrypted attachment bytes admitted from one message. */
+  maxAttachmentBytes: number
+  /** Maximum image or file parts admitted from one message. */
+  maxAttachmentsPerMessage: number
+  /** Total attachment download and admission deadline in milliseconds. */
+  attachmentTimeoutMs: number
+  /** Maximum complete reply bytes, including a truncation marker. */
+  maxReplyBytes: number
+  /** Interval in milliseconds for coalescing changed streaming reply text. */
+  replyIntervalMs: number
+  /** Maximum active Agent interval in milliseconds; expiry cancels and drains it. */
+  runTimeoutMs: number
+  /** SDK reconnection base delay in milliseconds. */
+  reconnectIntervalMs: number
+  /** Maximum SDK reconnection attempts. */
+  maxReconnectAttempts: number
+  /** Maximum SDK authentication attempts. */
+  maxAuthFailureAttempts: number
+  /** SDK heartbeat interval in milliseconds. */
+  heartbeatIntervalMs: number
+  /** Language of transport status replies. */
+  language: 'zh' | 'en'
+}
+```
+
+来源： [`packages/interaction/wecom/src/index.ts:26`](../packages/interaction/wecom/src/index.ts)
+
 <a id="deepseek-aidsh-workflow-worker-thread"></a>
 
 ## `@deepseek-ai/dsh-workflow-worker-thread`

@@ -1,0 +1,3 @@
+- id: wecom
+  name: '@deepseek-ai/dsh-wecom'
+  config: !!js ctx.wecomTestConfig

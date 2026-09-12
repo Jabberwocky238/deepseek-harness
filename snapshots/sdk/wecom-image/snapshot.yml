@@ -1,0 +1,13 @@
+version: 1
+scenario: wecom-image
+profile: sdk
+composition: sdk-wecom-image
+recording: authored
+header:
+  class: wecom-image
+  pin: true
+input:
+  attachments:
+    - id: sha256:b1ff9c8ea3a780bad09b346c423d2d0e46815926879b18e841d928376a946640
+      mediaType: image/png
+      data: iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGP4z8AAAAMBAQDJ/pLvAAAAAElFTkSuQmCC

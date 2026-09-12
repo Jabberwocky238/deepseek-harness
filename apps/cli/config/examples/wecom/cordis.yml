@@ -1,0 +1,12 @@
+- insert:
+    - id: wecom
+      name: '@deepseek-ai/dsh-wecom'
+      config:
+        botId: !!js process.env.WECOM_BOT_ID
+        secretEnv: WECOM_BOT_SECRET
+        wsUrl: !!js process.env.WECOM_WS_URL || 'wss://openws.work.weixin.qq.com'
+        allowedUsers: !!js (process.env.WECOM_ALLOWED_USERS || '').split(',').map(value => value.trim()).filter(Boolean)
+        workspacePath: !!js process.cwd()
+        agentPreset: standard
+        permissionPreset: workspace-write
+        language: zh

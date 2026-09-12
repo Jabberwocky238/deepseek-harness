@@ -976,6 +976,32 @@ export interface Config {
 
 来源：[`packages/host/webserver/src/index.ts:59`](../packages/host/webserver/src/index.ts)
 
+<a id="deepseek-aidsh-im"></a>
+
+## `@deepseek-ai/dsh-im`
+
+依赖： `storageDomain`
+
+```ts config-catalog
+/** Deployment limits on retained IM records and admitted text. */
+export interface Config {
+  /** Maximum number of participants retained by this service. */
+  maxParticipants: number
+  /** Maximum number of conversations retained by this service. */
+  maxConversations: number
+  /** Maximum number of messages retained across conversations. */
+  maxMessages: number
+  /** Maximum UTF-8 bytes in one text message. */
+  maxTextBytes: number
+  /** Maximum attachment bytes per message, before storing or reading a file. */
+  maxAttachmentBytes: number
+  /** Maximum attachment count per message. */
+  maxAttachments: number
+}
+```
+
+源码： [`packages/interaction/im/src/index.ts:18`](../packages/interaction/im/src/index.ts)
+
 <a id="deepseek-aidsh-invariants"></a>
 
 ## `@deepseek-ai/dsh-invariants`

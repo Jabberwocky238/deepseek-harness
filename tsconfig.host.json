@@ -134,6 +134,7 @@
   ],
   "references": [
     { "path": "./packages/interaction/wecom" },
+    { "path": "./packages/interaction/im" },
     { "path": "./packages/client/ui-deliverables/tsconfig.host.json" },
     { "path": "./vendor/cosmokit" },
     { "path": "./vendor/schemastery" },

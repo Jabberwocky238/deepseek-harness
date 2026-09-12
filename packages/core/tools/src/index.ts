@@ -1535,6 +1535,8 @@ export class ToolRuntime extends Service {
     try {
       const tool = this.resolveExecution(exec.name, exec.agent, exec.parent !== undefined)
       if (!tool) throw new ToolNotFoundError(exec.name)
+      const denialReason = this.guardReason(exec)
+      if (denialReason !== undefined) return toolErrorResult(new Error(denialReason))
       state.bodyInvoked = true
       const returned = await tool.execute(exec.arguments, exec)
       const result = this.createSuccessResult(exec, tool, returned)

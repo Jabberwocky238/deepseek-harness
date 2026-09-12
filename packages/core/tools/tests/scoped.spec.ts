@@ -353,7 +353,7 @@ describe('scoped execution dispatch', () => {
     expect(calls).toEqual(['first', 'late'])
   })
 
-  it('defers a scoped guard that replaces the last guard in its generation', async () => {
+  it('rechecks a replaced guard before entering the tool body', async () => {
     const ctx = await mount()
     const { scope, key } = await mintAgentScope(ctx, 'a')
     const calls: string[] = []
@@ -369,10 +369,35 @@ describe('scoped execution dispatch', () => {
       return undefined
     })
 
-    expect(await run(ctx, 't', key)).toBe('ran:t')
-    expect(calls).toEqual(['first'])
     expect(await run(ctx, 't', key)).toBe('Error: replacement denial')
     expect(calls).toEqual(['first', 'replacement'])
+    expect(await run(ctx, 't', key)).toBe('Error: replacement denial')
+    expect(calls).toEqual(['first', 'replacement', 'replacement'])
+  })
+
+  it('rechecks guards after an asynchronous execution wrapper before starting the body', async () => {
+    const ctx = await mount()
+    const entered = Promise.withResolvers<undefined>()
+    const release = Promise.withResolvers<undefined>()
+    let deny = false
+    let invoked = false
+    ctx.tools.register({ ...tool('t'), execute: async () => { invoked = true; return 'ran:t' } })
+    ctx.tools.guard(() => deny ? 'new input waiting' : undefined)
+    ctx.on('tools/execute', async (_exec, next) => {
+      entered.resolve(undefined)
+      await release.promise
+      return next()
+    })
+    const pending = run(ctx, 't')
+    try {
+      await entered.promise
+      deny = true
+    } finally {
+      release.resolve(undefined)
+    }
+    expect(await pending).toBe('Error: new input waiting')
+    expect(invoked).toBe(false)
+    await ctx.fiber.dispose()
   })
 
   it('shares one token and materialized argument value across the pipeline', async () => {

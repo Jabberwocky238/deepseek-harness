@@ -1,0 +1,16 @@
+.panel { display: flex; height: 100%; min-height: 0; color: var(--dsw-alias-text-primary); background: var(--dsw-alias-background-primary); }
+.navigation { width: 260px; flex-shrink: 0; padding: 20px; overflow: auto; border-right: 1px solid var(--dsw-alias-border-default); display: flex; flex-direction: column; gap: 10px; }
+.navigation h2, .navigation h3 { margin: 8px 0; }
+.contact { display: flex; gap: 8px; align-items: center; }
+.chat { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; padding: 24px; gap: 16px; }
+.chat header h2 { margin: 0; }
+.messages { flex: 1; overflow: auto; display: flex; flex-direction: column; gap: 16px; }
+.message { padding: 16px; border: 1px solid var(--dsw-alias-border-default); border-radius: 12px; }
+.message p { white-space: pre-wrap; overflow-wrap: anywhere; }
+.message small { display: block; margin-top: 8px; color: var(--dsw-alias-text-secondary); }
+.image { display: block; max-width: 100%; max-height: 320px; object-fit: contain; margin: 8px 0; }
+.composer { display: flex; flex-direction: column; gap: 10px; }
+.composer textarea { width: 100%; min-height: 80px; resize: vertical; color: inherit; background: inherit; border: 1px solid var(--dsw-alias-border-default); border-radius: 8px; padding: 12px; }
+.composer fieldset { display: flex; flex-wrap: wrap; gap: 12px; border: 0; padding: 0; }
+.actions { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; }
+@media (max-width: 760px) { .navigation { width: 180px; padding: 12px; } .chat { padding: 12px; } }

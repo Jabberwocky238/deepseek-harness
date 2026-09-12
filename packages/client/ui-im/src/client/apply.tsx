@@ -8,11 +8,7 @@ import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 import type {} from '@deepseek-ai/dsh-client-locale/client'
 import remote from '@deepseek-ai/dsh-client-ui-im/remote'
 import { ImPanel, type ImPanelApi } from './panel.tsx'
-import { zh, en, type ImKey } from './locales.ts'
-
-declare module '@deepseek-ai/dsh-client-ui-slots' {
-  interface LocaleNamespaceMap { im: ImKey }
-}
+import { zh, en } from './locales.ts'
 
 /** Layout slots, copy, and the typed Remote carrier are required. */
 export const inject = ['slots', 'locale', 'remote']
@@ -37,6 +33,11 @@ export async function apply(ctx: Context): Promise<void> {
     messages: async (...args) => value(await ctx.remote.imPanel.messages(...args)),
     send: async (...args) => value(await ctx.remote.imPanel.send(...args)),
     download: async (...args) => value(await ctx.remote.imPanel.download(...args)),
+    acknowledge: async (...args) => { value(await ctx.remote.imPanel.acknowledge(...args)) },
+    removeContact: async (...args) => { value(await ctx.remote.imPanel.removeContact(...args)) },
+    renameGroup: async (...args) => { value(await ctx.remote.imPanel.renameGroup(...args)) },
+    invite: async (...args) => { value(await ctx.remote.imPanel.invite(...args)) },
+    removeMember: async (...args) => { value(await ctx.remote.imPanel.removeMember(...args)) },
   }
   ctx.slots.inject('main', () => ctx.slots.register({ name: 'main', key: 'im', locale: 'im', inject: () => ({ api }) }, ImPanel))
   ctx.slots.inject('sidebar.panellist', () => ctx.slots.register({ name: 'sidebar.panellist', id: 'im', locale: 'im', label: () => ctx.locale.bind('im')('title') }, ImIcon))

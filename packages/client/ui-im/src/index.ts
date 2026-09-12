@@ -52,7 +52,10 @@ export class ImPanelService extends TypertRemoteService {
    */
   @Remote('snapshot')
   snapshot(): ImPanelSnapshot {
+    const conversations = this.ctx.im.conversations(this.viewer, 'im')
+    const people = [...new Set(conversations.flatMap(chat => chat.members))].map(id => this.ctx.im.participant(id))
     return {
+      people, attachmentLimits: this.ctx.im.attachmentLimits(),
       viewer: this.ctx.im.participant(this.viewer), contacts: this.ctx.im.contacts(this.viewer),
       conversations: this.ctx.im.conversations(this.viewer, 'im'), inbox: this.ctx.im.inbox(this.viewer), pollIntervalMs: this.config.pollIntervalMs,
     }
@@ -78,15 +81,21 @@ export class ImPanelService extends TypertRemoteService {
    * @param name - displayed chat name.
    * @param members - selected native contacts; the local human is included automatically.
    * @param kind - direct chat or group.
-   * @returns its durable identity; AI-to-AI permission remains denied until externally granted.
+   * @returns its durable identity; group membership permits group messages; direct messages require a mutual contact.
    */
   @Remote('createConversation')
   async createConversation(name: string, members: ParticipantId[], kind: 'direct' | 'group'): Promise<ConversationId> {
     if (name.trim() === '') throw new Error('IM conversation name must not be empty')
-    const id = brandString<ConversationId>(randomUUID())
     const participants = [...new Set([this.viewer, ...members])]
+    if (members.some(member => !this.ctx.im.contacts(this.viewer).some(contact => contact.id === member))) {
+      throw new Error('IM conversation creation requires contacts')
+    }
+    const existing = kind === 'direct' ? this.ctx.im.conversations(this.viewer, 'im').find(chat =>
+      chat.kind === 'direct' && chat.members.length === participants.length && participants.every(member => chat.members.includes(member))) : undefined
+    if (existing !== undefined) return existing.id
+    const id = brandString<ConversationId>(randomUUID())
     await this.ctx.im.addConversation({ id, namespace: 'im', name, kind, owner: this.viewer, members: participants, maxAiMessages: this.config.maxAiMessages })
-    for (const member of participants) if (this.ctx.im.participant(member).kind === 'ai') await this.ctx.imRuntime.connect(id, member)
+    for (const member of participants) if (this.ctx.im.participant(member).kind === 'ai') await this.ctx.imRuntime.connect(member)
     return id
   }
 
@@ -152,6 +161,66 @@ export class ImPanelService extends TypertRemoteService {
     const chunks: Uint8Array[] = []
     for await (const chunk of this.ctx.attachments.readFileStream(attachment.attachment)) chunks.push(chunk)
     return { name: attachment.attachment.name, mediaType: 'application/octet-stream', data: Buffer.concat(chunks).toString('base64') }
+  }
+
+  /**
+   * Acknowledge messages displayed in the local human's panel.
+   * @param conversation - visible native conversation.
+   * @param through - last displayed sequence.
+   * @returns after the inbox acknowledgement is durable.
+   */
+  @Remote('acknowledge')
+  async acknowledge(conversation: ConversationId, through: number): Promise<void> {
+    this.requireNativeConversation(conversation)
+    await this.ctx.im.acceptInbox(conversation, this.viewer, through)
+  }
+
+  /**
+   * Remove a mutual contact without deleting chat history or group membership.
+   * @param participant - existing contact.
+   * @returns after both contact lists are updated.
+   */
+  @Remote('removeContact')
+  async removeContact(participant: ParticipantId): Promise<void> {
+    await this.ctx.im.removeContact(this.viewer, this.viewer, participant)
+  }
+
+  /**
+   * Rename a group owned by the local human.
+   * @param conversation - owned group.
+   * @param name - new display name.
+   * @returns after durable replacement.
+   */
+  @Remote('renameGroup')
+  async renameGroup(conversation: ConversationId, name: string): Promise<void> {
+    this.requireNativeConversation(conversation)
+    await this.ctx.im.renameGroup(this.viewer, conversation, name)
+  }
+
+  /**
+   * Add a contact to an owned group and connect an AI participant.
+   * @param conversation - owned group.
+   * @param participant - contact to invite.
+   * @returns after membership and AI admission are ready.
+   */
+  @Remote('invite')
+  async invite(conversation: ConversationId, participant: ParticipantId): Promise<void> {
+    this.requireNativeConversation(conversation)
+    if (!this.ctx.im.contacts(this.viewer).some(contact => contact.id === participant)) throw new Error('IM invitation requires a contact')
+    await this.ctx.im.addGroupMember(this.viewer, conversation, participant)
+    if (this.ctx.im.participant(participant).kind === 'ai') await this.ctx.imRuntime.connect(participant)
+  }
+
+  /**
+   * Remove a member from an owned group or leave a group as the local human.
+   * @param conversation - visible group.
+   * @param participant - member to remove.
+   * @returns after membership is removed; contacts and history are retained.
+   */
+  @Remote('removeMember')
+  async removeMember(conversation: ConversationId, participant: ParticipantId): Promise<void> {
+    this.requireNativeConversation(conversation)
+    await this.ctx.im.removeGroupMember(this.viewer, conversation, participant)
   }
 
   private requireNativeConversation(id: ConversationId): void {

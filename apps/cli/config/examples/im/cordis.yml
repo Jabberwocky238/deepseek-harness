@@ -1,0 +1,22 @@
+- id: im
+  disabled: false
+  config:
+    maxParticipants: 1000
+    maxConversations: 500
+    maxMessages: 100000
+    maxTextBytes: 16384
+    maxAttachmentBytes: 20971520
+    maxAttachments: 20
+- id: im-runtime
+  disabled: false
+  config:
+    workspacePath: !!js process.cwd()
+    agentPreset: standard
+    permissionPreset: workspace-write
+- id: ui-im
+  disabled: false
+  config:
+    viewerId: local-human
+    viewerName: Me
+    pollIntervalMs: 1500
+    maxAiMessages: 10000

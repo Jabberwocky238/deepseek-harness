@@ -8,6 +8,8 @@ export interface ImPanelSnapshot {
   contacts: Participant[]
   conversations: Conversation[]
   inbox: ImMessage[]
+  people: Participant[]
+  attachmentLimits: { maxBytes: number; maxCount: number }
   pollIntervalMs: number
 }
 /** Uploaded attachment bytes; references are minted by the host after validation. */

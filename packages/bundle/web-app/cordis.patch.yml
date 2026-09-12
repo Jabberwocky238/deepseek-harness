@@ -482,3 +482,15 @@
       name: '@deepseek-ai/dsh-agent-presets'
       config:
         default: standard
+
+# Native IM is enabled by the optional IM overlay.
+- insert:
+    - id: im
+      name: '@deepseek-ai/dsh-im'
+      disabled: true
+    - id: im-runtime
+      name: '@deepseek-ai/dsh-im/runtime'
+      disabled: true
+    - id: ui-im
+      name: '@deepseek-ai/dsh-client-ui-im'
+      disabled: true

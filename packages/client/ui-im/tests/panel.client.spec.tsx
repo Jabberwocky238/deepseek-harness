@@ -47,7 +47,7 @@ it('sends a group message to its members without requiring individual recipient 
 
 it('shows a file sent by an AI and downloads it only when requested', async () => {
   const { api } = fixture()
-  api.messages = vi.fn(async () => [{
+  api.messages = vi.fn<ImPanelApi['messages']>(async () => [{
     id: brandString<ImMessageId>('file-message'), conversation: room, sender: bot.id, recipients: [me.id], text: 'Here is your file',
     attachments: [{ type: 'file', attachment: { attachmentId: brandString<AttachmentId>('file'), name: 'hello.txt', bytes: 5 } }],
     mode: 'queue', sequence: 1, deliveries: { Me: 'pending' },

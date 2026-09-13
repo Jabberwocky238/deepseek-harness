@@ -423,6 +423,7 @@
       "@deepseek-ai/dsh-tool-bash": ["./packages/shell/tool-bash/src"],
       "@deepseek-ai/dsh-tool-bash-persistent": ["./packages/shell/tool-bash-persistent/src"],
       "@deepseek-ai/dsh-tool-cordis": ["./packages/extensions/tool-cordis/src"],
+      "@deepseek-ai/dsh-tool-data-lake": ["./packages/storage/tool-data-lake/src"],
       "@deepseek-ai/dsh-tool-fs": ["./packages/fs/tool-fs/src"],
       "@deepseek-ai/dsh-tool-fs-search": ["./packages/fs/tool-fs-search/src"],
       "@deepseek-ai/dsh-tool-goal": ["./packages/goal/tool-goal/src"],

@@ -576,6 +576,36 @@ export interface Config {
 
 来源：[`packages/credentials/credentials-local/src/index.ts:64`](../packages/credentials/credentials-local/src/index.ts)
 
+<a id="deepseek-aidsh-data-lake"></a>
+
+## `@deepseek-ai/dsh-data-lake`
+
+```ts config-catalog
+/** Multiple independently indexed roots mounted by one service. */
+export interface Config {
+  /** Each lake owns exactly one root index and its directory maps. */
+  lakes: LakeConfig[]
+}
+
+/** Configuration for one lake; indexing runs only when requested. */
+export interface LakeConfig {
+  /** Unique name used by service consumers and model tools. */
+  id: string
+  /** Absolute directory path or s3://bucket/prefix/ root. */
+  root: string
+  /** Required for S3 roots. */
+  region?: string
+  /** Optional S3-compatible service endpoint. */
+  endpoint?: string
+  /** Use path-style S3 addressing. */
+  forcePathStyle?: boolean
+  /** Maximum entries accepted by a complete scan. */
+  maxEntries: number
+}
+```
+
+来源： [`packages/storage/data-lake/src/index.ts:40`](../packages/storage/data-lake/src/index.ts)
+
 <a id="deepseek-aidsh-e2b"></a>
 
 ## `@deepseek-ai/dsh-e2b`
@@ -2805,6 +2835,26 @@ export interface Config {
 ```
 
 来源：[`packages/shell/tool-bash-persistent/src/index.ts:435`](../packages/shell/tool-bash-persistent/src/index.ts)
+
+<a id="deepseek-aidsh-tool-data-lake"></a>
+
+## `@deepseek-ai/dsh-tool-data-lake`
+
+依赖： `tools` · `dataLake`
+
+```ts config-catalog
+/** Bounds on model-visible catalog pages and agent-authored summaries. */
+export interface Config {
+  /** Maximum entries in one result page. */
+  maxPageEntries: number
+  /** Maximum UTF-8 bytes of the complete rendered result. */
+  maxOutputBytes: number
+  /** Maximum UTF-8 bytes of one agent-authored summary. */
+  maxSummaryBytes: number
+}
+```
+
+来源： [`packages/storage/tool-data-lake/src/index.ts:17`](../packages/storage/tool-data-lake/src/index.ts)
 
 <a id="deepseek-aidsh-tool-fs"></a>
 

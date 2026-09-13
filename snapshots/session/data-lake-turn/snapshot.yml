@@ -1,0 +1,10 @@
+version: 1
+scenario: data-lake-turn
+profile: headless
+composition: data-lake
+recording: authored
+header:
+  class: data-lake
+  pin: true
+workspace:
+  final: true

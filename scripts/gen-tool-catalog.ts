@@ -189,6 +189,19 @@ export interface ToolPackage {
  */
 const TOOL_PACKAGES: ToolPackage[] = [
   {
+    pkg: '@deepseek-ai/dsh-tool-data-lake',
+    dir: 'tool-data-lake',
+    source: 'packages/storage/tool-data-lake/src/index.ts',
+    requires: ['dataLake'],
+    writes: ['tool/call', 'tool/result', 'colocated lake maps, root index, and agent summaries'],
+    async mount(ctx) {
+      const { default: DataLake } = await import('@deepseek-ai/dsh-data-lake')
+      const tool = await import('@deepseek-ai/dsh-tool-data-lake')
+      await ctx.plugin(DataLake, { lakes: [] })
+      await ctx.plugin(tool, { maxPageEntries: 10, maxOutputBytes: 10000, maxSummaryBytes: 1000 })
+    },
+  },
+  {
     pkg: '@deepseek-ai/dsh-tool-ask-user',
     dir: 'tool-ask-user',
     source: 'packages/interaction/tool-ask-user/src/index.ts',

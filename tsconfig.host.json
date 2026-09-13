@@ -133,6 +133,7 @@
     "scripts/client-bundle-purity.spec.ts"
   ],
   "references": [
+    { "path": "./packages/storage/tool-data-lake" },
     { "path": "./packages/storage/data-lake" },
     { "path": "./packages/bundle/webwjkj" },
     { "path": "./packages/interaction/wecom" },

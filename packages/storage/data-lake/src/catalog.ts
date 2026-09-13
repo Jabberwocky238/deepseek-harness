@@ -3,6 +3,7 @@
  * @module @deepseek-ai/dsh-data-lake/catalog
  */
 import { createHash } from 'node:crypto'
+import { isDeepStrictEqual } from 'node:util'
 import { catalogSchema, INDEX_PATH, lakePath, mapSchema, METADATA, summarySchema } from './records.ts'
 import type { LakeCatalog, LakeChange, LakeDirectoryRecord, LakeEntry, LakeMapLocation, LakeRoot, LakeSource, LakeSummary } from './types.ts'
 
@@ -50,7 +51,8 @@ export class LakeIndexer {
     const raw = await this.source.read(INDEX_PATH, signal)
     if (raw === undefined) return null
     const catalog = catalogSchema.parse(raw)
-    if (JSON.stringify(catalog.root) !== JSON.stringify(this.root)) throw new Error('data-lake: index belongs to a different root')
+    const storedRoot = this.root.kind === 'disk' ? { kind: 'disk', path: '.' } : this.root
+    if (!isDeepStrictEqual(catalog.root, storedRoot)) throw new Error('data-lake: index belongs to a different root')
     const locations = new Set<string>()
     for (const location of catalog.maps) {
       if (location.directory && !location.directory.endsWith('/')) throw new Error('data-lake: invalid directory path')
@@ -64,7 +66,7 @@ export class LakeIndexer {
     if (!locations.has('')) throw new Error('data-lake: root map is missing')
     const mapPaths = new Set(catalog.maps.map(location => location.mapPath))
     if (catalog.index.some(entry => !mapPaths.has(entry.mapPath))) throw new Error('data-lake: dangling map reference')
-    return catalog
+    return { ...catalog, root: this.root }
   }
 
   private async readMap(location: LakeMapLocation, signal: AbortSignal): Promise<LakeDirectoryRecord> {
@@ -151,7 +153,8 @@ export class LakeIndexer {
       index: index.sort((a, b) => a.path < b.path ? -1 : a.path > b.path ? 1 : 0),
       maps: [...maps.values()].sort((a, b) => a.directory < b.directory ? -1 : a.directory > b.directory ? 1 : 0),
     }
-    await this.source.write(INDEX_PATH, catalog, signal)
+    const storedRoot = this.root.kind === 'disk' ? { kind: 'disk', path: '.' } : this.root
+    await this.source.write(INDEX_PATH, { ...catalog, root: storedRoot }, signal)
     return catalog
   }
 

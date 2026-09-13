@@ -1,0 +1,17 @@
+- insert:
+    - id: data-lake
+      name: '@deepseek-ai/dsh-data-lake'
+      config:
+        lakes:
+          - id: documents
+            root: !!js process.cwd() + '/lake'
+            maxEntries: 100
+          - id: archive
+            root: !!js process.cwd() + '/archive'
+            maxEntries: 100
+    - id: tool-data-lake
+      name: '@deepseek-ai/dsh-tool-data-lake'
+      config:
+        maxPageEntries: 10
+        maxOutputBytes: 10000
+        maxSummaryBytes: 1000

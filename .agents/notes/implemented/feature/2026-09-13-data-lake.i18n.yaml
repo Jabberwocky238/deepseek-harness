@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-09-13-data-lake.md
-2026-09-13-data-lake.md: 49630da763105fb146f5f9f62aeea1109b0d9efc
-2026-09-13-data-lake.zh.md: 188259a194116c9e756db20e4460873d384626a9
+2026-09-13-data-lake.md: 5b71a95090d05ae6618bb1812ec0e255c9cdcc5a
+2026-09-13-data-lake.zh.md: bf887eac58396b0f69f86848108b6bd79c16fb1f

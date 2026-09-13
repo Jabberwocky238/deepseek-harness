@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-The storage group keeps non-session application data across restarts, including workspace records and session sidecars. Choose `storage-json` for human-readable files or `storage-sqlite` for point updates in one database; `storage-domain` adds schema-validated typed records and change notifications, while `storage` selects the configured backend. These packages are optional and host-side: they do not expose tools, prompt content, or session events to the model. Use the group when application state must outlive a process, and omit it when the composition has no such data.
+The storage group keeps non-session application data across restarts, including workspace records and session sidecars. Choose `storage-json` for human-readable files or `storage-sqlite` for point updates in one database; `storage-domain` adds schema-validated typed records and change notifications, while `storage` selects the configured backend. The optional `data-lake` service indexes multiple disk or S3 roots with directory-local maps and summaries; `tool-data-lake` lets agents navigate them and summarize changes.
 
 ## Table of Contents
 
@@ -28,6 +28,8 @@ The storage group keeps non-session application data across restarts, including 
 | [`storage-json`](storage-json/README.md) | Stores each unit as one human-readable JSON file | registers backend `json` |
 | [`storage-sqlite`](storage-sqlite/README.md) | Stores units as JSON documents in one SQLite database | registers backend `sqlite` |
 | [`storage-domain`](storage-domain/README.md) | Provides schema-validated, change-emitting KV domains over routed backends | `ctx.storageDomain` |
+| [`data-lake`](data-lake/README.md) | Indexes independent disk/S3 roots with colocated maps and summaries | `ctx.dataLake` |
+| [`tool-data-lake`](tool-data-lake/README.md) | Lets agents query lakes and update summaries | `data_lake` tool |
 
 -----
 

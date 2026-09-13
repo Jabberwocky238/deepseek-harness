@@ -9,7 +9,7 @@ kind: "package-group"
 
 ## 概述
 
-存储组跨重启保留非会话应用数据，包括工作区记录和会话伴随数据。需要人类可读文件时选择 `storage-json`，需要在单个数据库中定点更新时选择 `storage-sqlite`；`storage-domain` 增加经过 schema 校验的类型化记录和变更通知，而 `storage` 选择已配置的后端。这些包是可选项且只面向宿主侧：它们不会向模型暴露工具、提示词内容或会话事件。当应用状态必须在进程结束后继续存在时使用本组；组合没有此类数据时可以省略本组。
+存储组跨重启保留非会话应用数据，包括工作区记录和会话伴随数据。需要人类可读文件时选择 `storage-json`，需要在单个数据库中定点更新时选择 `storage-sqlite`；`storage-domain` 增加经过 schema 校验的类型化记录和变更通知，而 `storage` 选择已配置的后端。可选的 `data-lake` 服务为多个磁盘或 S3 根路径建立索引，并在目录内保存地图和摘要；`tool-data-lake` 让 Agent 导航数据湖并总结变化。
 
 ## 目录
 
@@ -28,6 +28,8 @@ kind: "package-group"
 | [`storage-json`](storage-json/README.zh.md) | 把每个单元存为一个人类可读的 JSON 文件 | 注册后端 `json` |
 | [`storage-sqlite`](storage-sqlite/README.zh.md) | 把单元作为 JSON 文档存进一个 SQLite 数据库 | 注册后端 `sqlite` |
 | [`storage-domain`](storage-domain/README.zh.md) | 在已路由后端之上提供经过 schema 校验、发出变更事件的 KV 领域 | `ctx.storageDomain` |
+| [`data-lake`](data-lake/README.zh.md) | 为独立磁盘/S3 根路径建立就地地图和摘要索引 | `ctx.dataLake` |
+| [`tool-data-lake`](tool-data-lake/README.zh.md) | 让 Agent 查询湖并更新摘要 | `data_lake` 工具 |
 
 -----
 

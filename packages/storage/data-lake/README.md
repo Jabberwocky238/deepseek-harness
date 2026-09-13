@@ -28,9 +28,17 @@ Mount the plugin in a profile composition. Configure `lakes` with distinct IDs a
 
 Call `ctx.dataLake.list()` to discover lakes, then `scan(lakeId)` to build one lake's catalog. `catalog(lakeId)` reads its root index; `directory(lakeId, path)` reads one map and its summary. Directory paths are root-relative and end in `/`; the empty string selects the root. `summarize(lakeId, path, revision, text)` records the agent's prose and rejects a revision that differs from the current index. These methods accept an optional final cancellation signal.
 
-The source root must already exist and permit metadata writes. Metadata lives under `.dsh-data-lake/` at each indexed directory. Only the lake root contains `.dsh-data-lake/index.json`; directory maps and summaries live in `maps/<revision>.json` and `summaries/<revision>.json` under that directory's metadata folder. The root index records these locations. Metadata folders never become source entries.
+The source root must already exist and permit metadata writes. Metadata lives under `.dsh-data-lake/` at each indexed directory. Only the lake root contains `.dsh-data-lake/index.json`; directory maps and summaries live in `maps/<revision>.json` and `summaries/<revision>.json` under that directory's metadata folder. The root index records these locations; its on-disk root is `.` so a relocated disk lake retains its catalog. Metadata folders never become source entries.
 
 A map contains only direct children, plus its parent, depth, revision, changes since its preceding indexed map, and the last available summary. The current summary is separate and absent until an agent writes it. Agents use the map, changes, previous summary, and source content to summarize each affected directory, working upward from changed leaves. Scanning itself calls no model and does not generate prose.
+
+### Local S3 verification
+
+Start the installed fals3y server with a dedicated data directory, then run the integration test against its endpoint. The test covers more than one S3 listing page, nested maps, two independent buckets, persisted summaries, and changed or deleted objects.
+
+```sh
+DSH_DATA_LAKE_FALS3Y_ENDPOINT=http://127.0.0.1:9000 pnpm run test:e2e packages/storage/data-lake/tests/s3.e2e.ts
+```
 
 -----
 
@@ -73,7 +81,7 @@ No direct request-prefix changes.
 - Changes reflect source metadata, not a full content hash. A same-size disk rewrite retaining the same modification time may be missed; summaries describe the last indexed revision, not unscanned source changes.
 - One live writer owns each root. Independent processes and overlapping physical roots are not coordinated. Source mutation during a scan can produce a mixed-time inventory or an IO error.
 - Old map and summary files remain; automatic retention is not implemented. S3 prefixes retained by metadata remain navigable even after their source objects are removed.
-- Paths containing dot segments, backslashes, or the reserved metadata component are rejected. S3-compatible behavior is tested through HTTP fixtures; a live deployment requires its own credentials and verification.
+- Paths containing dot segments, backslashes, or the reserved metadata component are rejected. S3-compatible behavior is tested through HTTP fixtures. The S3 integration test uses an installed local fals3y server through `DSH_DATA_LAKE_FALS3Y_ENDPOINT`, creates isolated buckets, and removes them afterward. It uses test credentials and requires no Docker or cloud account.
 
 <a id="dev-note"></a>
 ### Dev Note

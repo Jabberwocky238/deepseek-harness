@@ -11,7 +11,7 @@ import type { Branded } from '@deepseek-ai/dsh-brand'
 import { LakeIndexer } from './catalog.ts'
 import { DiskLakeSource } from './disk.ts'
 import { S3LakeSource } from './s3.ts'
-import type { LakeCatalog, LakeRoot, LakeSummary } from './types.ts'
+import type { LakeCatalog, LakeDirectoryRecord, LakeRoot, LakeSummary } from './types.ts'
 
 export type { LakeCatalog, LakeChange, LakeDirectoryRecord, LakeEntry, LakeIndexEntry, LakeMapLocation, LakeRoot, LakeSource, LakeSummary } from './types.ts'
 
@@ -165,7 +165,7 @@ export class DataLake extends Service {
    * @param signal - Optional caller cancellation.
    * @returns the directory record, or null when it is not indexed.
    */
-  directory(id: LakeId, path: string, signal?: AbortSignal): ReturnType<LakeIndexer['directory']> {
+  directory(id: LakeId, path: string, signal?: AbortSignal): Promise<{ map: LakeDirectoryRecord; summary: LakeSummary | null } | null> {
     return this.run(id, (indexer, current) => indexer.directory(path, current), signal)
   }
 

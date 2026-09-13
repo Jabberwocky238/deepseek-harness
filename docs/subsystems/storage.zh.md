@@ -152,6 +152,10 @@ type DomainChanged = DomainChangedPut | DomainChangedDeleted
 
 `put`（插入、覆写和 global 写入）在 `value` 中携带新快照——绝不携带旧值；需要做差异比较的消费方自行保留上一份快照。`deleted` 是不携带值的墓碑。该事件是通知，不是事务参与者：发出时提交点已经过去，因此同步抛出的监听器会被兜住并记录一条警告，而不会让已经持久的写入被拒绝；发出的值等于发出时刻的内存态。该事件仅限进程内；跨进程的变更推送是一项已记录的限制（[包 README](../../packages/storage/storage-domain/README.zh.md)）。
 
+## 数据湖：`ctx.dataLake`
+
+[数据湖服务](../../packages/storage/data-lake/README.zh.md) 配置多个独立磁盘目录或 S3 前缀。每个湖拥有一个根索引，用于定位任意数量的单层目录地图；各地图与 Agent 编写的摘要保存在对应目录内。[模型工具](../../packages/storage/tool-data-lake/README.zh.md) 根据 ID 选择湖，分页读取索引和地图，并针对当前目录版本保存摘要。湖记录与结构化领域存储设施分离。
+
 <!-- BEGIN GENERATED cordis-surface (gen-cordis-catalog.ts) — do not edit between markers -->
 
 <a id="cordis-surface"></a>

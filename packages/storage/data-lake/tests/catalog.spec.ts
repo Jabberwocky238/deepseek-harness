@@ -1,4 +1,4 @@
-import { mkdtemp, mkdir, readFile, rm, symlink, writeFile } from 'node:fs/promises'
+import { cp, mkdtemp, mkdir, readFile, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -79,6 +79,17 @@ describe('colocated directory maps', () => {
     await rm(join(root, '.dsh-data-lake'), { recursive: true })
     await symlink(external.root, join(root, '.dsh-data-lake'), 'junction')
     await expect(indexer.scan(signal)).rejects.toThrow('symlink')
+  })
+
+  it('reopens a relocated disk lake using its colocated relative records', async () => {
+    const first = await fixture()
+    const second = await fixture()
+    await first.indexer.scan(first.signal)
+    const map = (await first.indexer.directory('', first.signal))!
+    await first.indexer.summarize('', map.map.revision, 'Empty lake.', first.signal)
+    await cp(join(first.root, '.dsh-data-lake'), join(second.root, '.dsh-data-lake'), { recursive: true })
+    expect((await second.indexer.catalog(second.signal))?.root).toEqual({ kind: 'disk', path: second.root })
+    expect((await second.indexer.directory('', second.signal))?.summary?.text).toBe('Empty lake.')
   })
 
   it('keeps two lakes independent through the same service and rejects work after disposal', async () => {

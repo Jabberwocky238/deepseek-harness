@@ -117,8 +117,12 @@ export async function handleAccount(
       return
     }
     if (req.method === 'GET' || req.method === 'HEAD') {
-      if (url.pathname !== '/account' && url.pathname !== '/login') { res.writeHead(404); res.end(); return }
-      if (url.pathname === '/account' && !(await runtime.user(headers))) { redirect(`/login?lang=${locale}`); return }
+      if (!['/account', '/account/settings', '/login'].includes(url.pathname)) { res.writeHead(404); res.end(); return }
+      if (url.pathname !== '/login' && !(await runtime.user(headers))) { redirect(`/login?lang=${locale}`); return }
+      if (url.pathname === '/account') {
+        redirect(`/workspace?lang=${locale}&panel=security${url.searchParams.has('error') ? '&error=account' : ''}`)
+        return
+      }
       await page(url.searchParams.has('error') ? 'invalid' : undefined)
       return
     }

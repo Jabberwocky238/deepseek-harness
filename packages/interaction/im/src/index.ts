@@ -113,6 +113,23 @@ export class ImService {
   }
 
   /**
+   * Set the AI reply budget without changing conversation membership or history.
+   * @param id - existing conversation.
+   * @param owner - authenticated conversation owner.
+   * @param limit - nonnegative total AI message limit.
+   * @returns after the updated budget is durable.
+   */
+  setAiMessageLimit(id: ConversationId, owner: ParticipantId, limit: number): Promise<void> {
+    return this.mutate(async () => {
+      if (!Number.isSafeInteger(limit) || limit < 0) throw new Error('Invalid IM AI message limit')
+      const table = this.domain.table('conversations')
+      const room = table.get(id)
+      if (room === undefined || room.owner !== owner) throw new Error('IM conversation owner required')
+      if (room.maxAiMessages !== limit) await table.put(id, { ...room, maxAiMessages: limit })
+    })
+  }
+
+  /**
    * Commit one directed message before scheduling recipient acceptance. AI recipients are explicit.
    * @param input - authenticated sender, same-conversation recipients, and delivery mode.
    * @returns the durable message; duplicate ids require identical content and routing.

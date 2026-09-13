@@ -22,6 +22,45 @@
         maxTextBytes: 16384
         maxAttachmentBytes: 10485760
         maxAttachments: 10
+    - id: webwjkj-settings
+      name: '@deepseek-ai/dsh-settings-file'
+    - id: webwjkj-credentials
+      name: '@deepseek-ai/dsh-credentials-local'
+    - id: webwjkj-llm
+      name: '@deepseek-ai/dsh-llm'
+    - id: webwjkj-llm-deepseek
+      name: '@deepseek-ai/dsh-llm-deepseek'
+      config:
+        apiKeyEnv: DEEPSEEK_API_KEY
+    - id: webwjkj-model
+      name: '@deepseek-ai/dsh-agent-default-model'
+      config:
+        provider: deepseek-official
+        model: deepseek-flash
+    - id: webwjkj-sessions
+      name: '@deepseek-ai/dsh-session'
+    - id: webwjkj-session-persistence
+      name: '@deepseek-ai/dsh-session-persistence-jsonl'
+      config:
+        root: !!js dshHomePath('webwjkj', 'sessions')
+    - id: webwjkj-projections
+      name: '@deepseek-ai/dsh-session-projection'
+    - id: webwjkj-system-prompt
+      name: '@deepseek-ai/dsh-system-prompt'
+      config:
+        includeHarnessIdentity: false
+        includeRuntimeContext: false
+        personaPrefix: 'You are default agent, a helpful chat assistant. The user supplies a JSON array of recent conversation messages ordered from oldest to newest. Answer the last user message using that history. Reply in the user’s language with ordinary text.'
+    - id: webwjkj-tools
+      name: '@deepseek-ai/dsh-tools'
+    - id: webwjkj-agents
+      name: '@deepseek-ai/dsh-agent'
+    - id: webwjkj-agent-loop
+      name: '@deepseek-ai/dsh-agent-loop'
+      config: { agents: [] }
+    - id: webwjkj-default-agent
+      name: '@deepseek-ai/dsh-webwjkj/default-agent'
+      config: { timeoutMs: 120000, historyMessages: 32, maxTokens: 2048, maxAiMessages: 100000 }
     - id: webwjkj-home
       name: '@deepseek-ai/dsh-webwjkj'
       config:

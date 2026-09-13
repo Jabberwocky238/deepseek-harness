@@ -337,3 +337,13 @@ it('keeps content unread until im_context opens its page and supports leaving al
   expect((await page({ kind: 'contact', id: bob })).isError).toBe(true)
   expect((await page({ kind: 'group', id: Im.conversationIdSchema.parse('unknown') })).isError).toBe(true)
 })
+
+it('lets only the conversation owner change the durable AI reply budget', async () => {
+  const { ctx } = await harness()
+  await expect(ctx.im.setAiMessageLimit(room, other, 20)).rejects.toThrow('owner required')
+  await expect(ctx.im.setAiMessageLimit(room, human, -1)).rejects.toThrow('Invalid')
+  await ctx.im.setAiMessageLimit(room, human, 0)
+  await expect(ctx.im.send({ id: Im.imMessageIdSchema.parse('budget-test'), conversation: room, sender: alice, recipients: [human], text: 'reply', attachments: [], mode: 'queue' })).rejects.toThrow('budget exhausted')
+  await ctx.im.setAiMessageLimit(room, human, 20)
+  expect((await ctx.im.send({ id: Im.imMessageIdSchema.parse('budget-test'), conversation: room, sender: alice, recipients: [human], text: 'reply', attachments: [], mode: 'queue' })).text).toBe('reply')
+})

@@ -2,7 +2,7 @@
 import { randomUUID } from 'node:crypto'
 import { z } from 'zod'
 import { brandString } from '@deepseek-ai/dsh-brand'
-import type { ImService, ParticipantId, Conversation, ConversationId, ImMessageId } from '@deepseek-ai/dsh-im'
+import type { ImService, ParticipantId, Conversation, ConversationId, ImMessageId, ImMessage } from '@deepseek-ai/dsh-im'
 import type { FriendProfile } from './friends.ts'
 import type { AccountUser } from './account-types.ts'
 /**
@@ -12,10 +12,12 @@ import type { AccountUser } from './account-types.ts'
  * @param url - directory request or selected contact/group history request.
  * @param peers - durably accepted account friendships to project into IM.
  * @param form - optional authenticated group creation or message form.
+ * @param reply - optional model reply consumer for the default contact.
  * @returns JSON data containing no authentication tokens or other users' directories.
  */
 export async function readImView(
   im: ImService, user: AccountUser, url: URL, peers: FriendProfile[] = [], form?: URLSearchParams,
+  reply?: (room: Conversation, input: ImMessage) => Promise<void>,
 ): Promise<unknown> {
   const owner = brandString<ParticipantId>(`webwjkj:${user.id}`)
   try {
@@ -91,6 +93,7 @@ export async function readImView(
   if (!selected)
     throw new Error('IM selection is not in the current directory')
   let room = group ?? (contact ? direct.get(contact.id) : undefined)
+  let agentError = false
   if (url.pathname === '/account/im/message' && form) {
     const text = z.string().trim().min(1).parse(form.get('text'))
     if (!room && contact) {
@@ -101,12 +104,22 @@ export async function readImView(
     }
     if (!room)
       throw new Error('Missing conversation')
-    await im.send({
+    const sent = await im.send({
       id: brandString<ImMessageId>(z.uuid().parse(form.get('messageId'))), conversation: room.id, sender: owner, recipients: room.members.filter(member => member !== owner), text, attachments: [], mode: 'queue',
     })
+    if (contact?.id === defaultAgent) {
+      try {
+        if (!reply) throw new Error('Default agent is unavailable')
+        await reply(room, sent)
+      } catch {
+        // Delivery is durable; report model failure without claiming the send failed.
+        agentError = true
+      }
+    }
   }
   return {
     name: selected.name,
+    ...agentError ? { agentError: true } : {},
     messages: room ? im.history(room.id, owner, 0).map(message => ({
       id: message.id, sender: im.participant(message.sender).name, text: message.text, own: message.sender === owner,
     })) : [],

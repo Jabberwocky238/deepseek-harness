@@ -33,6 +33,8 @@ Use `im_context({page: {kind: "group", id: "group-id"}})` or a `contact` page wi
 
 Channel receivers acknowledge individual messages after accepting them. AI recipients acknowledge messages after their contents enter the durable Session log. Neither acknowledgement is a human read receipt.
 
+Conversation owners can change the total AI reply budget with `setAiMessageLimit`; membership and message history remain intact. Other participants cannot change the budget.
+
 Messages retain their per-conversation `sequence` and a durable cross-conversation `activityOrder` assigned at first commit. Idempotent retries and delivery receipt updates preserve that order. Legacy records without the additive field read as zero, below messages with known recency; their earlier cross-conversation order is unknown.
 
 <a id="model-experience"></a>

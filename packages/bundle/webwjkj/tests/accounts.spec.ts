@@ -16,6 +16,43 @@ import { z } from 'zod'
 import { DatabaseSync } from 'node:sqlite'
 import { createAccountRuntime } from '../src/auth-runtime.ts'
 import * as Homepage from '../src/index.ts'
+import AgentRegistry from '@deepseek-ai/dsh-agent'
+import AgentLoop from '@deepseek-ai/dsh-agent-loop'
+import AgentDefaultModel from '@deepseek-ai/dsh-agent-default-model'
+import SessionStore from '@deepseek-ai/dsh-session'
+import SessionPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
+import SessionProjections from '@deepseek-ai/dsh-session-projection'
+import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
+import Tools from '@deepseek-ai/dsh-tools'
+import Llm, { LlmAdapter, type GenerateOptions, type StreamChunk } from '@deepseek-ai/dsh-llm'
+import * as DefaultAgent from '../src/default-agent.ts'
+
+class ReplyModel extends LlmAdapter {
+  requests: GenerateOptions[] = []
+  fail = false
+  hold = false
+  entered = Promise.withResolvers<undefined>()
+  override resolveModel(provider: string, id: string) {
+    return Promise.resolve({ provider, id, name: id, context: { contextWindow: 65536 } })
+  }
+  override async *stream(options: GenerateOptions): AsyncIterable<StreamChunk> {
+    this.requests.push(options)
+    this.entered.resolve(undefined)
+    if (this.hold) {
+      const signal = options.signal
+      if (!signal) throw new Error('Missing cancellation signal')
+      if (!signal.aborted) await new Promise<void>(resolve => signal.addEventListener('abort', () => resolve(), { once: true }))
+      signal.throwIfAborted()
+    }
+    if (this.fail) throw new Error('External model unavailable')
+    const text = '你好，我是 default agent。'
+    yield { type: 'block-start', index: 0, blockType: 'text' }
+    yield { type: 'text-delta', index: 0, text }
+    yield { type: 'block-end', index: 0, block: { type: 'text', text } }
+    yield { type: 'finish', reason: { kind: 'stop' } }
+  }
+}
+
 
 const delivery = vi.hoisted(() => ({ sms: new Map<string, string>(), email: new Map<string, string>(), fail: false }))
 vi.mock('tencentcloud-sdk-nodejs-sms', () => ({ sms: { v20210111: { Client: class {
@@ -43,10 +80,28 @@ afterEach(async () => {
   delivery.sms.clear(); delivery.email.clear(); delivery.fail = false
 })
 
-async function harness(localTestAccount = false) {
+async function harness(localTestAccount = false, model?: ReplyModel, timeoutMs = 30000) {
   root ??= await mkdtemp(join(tmpdir(), 'webwjkj-auth-'))
   vi.stubEnv('WJKJ_TEST_SECRET', 'test-secret-value-not-a-real-provider-key')
   const file = join(root, `cordis-${contexts.length}.yml`)
+  const agentRows = model ? `
+- name: '@deepseek-ai/dsh-llm'
+- name: test-model
+- name: '@deepseek-ai/dsh-agent-default-model'
+  config: { provider: test, model: test }
+- name: '@deepseek-ai/dsh-session'
+- name: '@deepseek-ai/dsh-session-persistence-jsonl'
+  config: { root: ${JSON.stringify(join(root, 'sessions'))} }
+- name: '@deepseek-ai/dsh-session-projection'
+- name: '@deepseek-ai/dsh-system-prompt'
+  config: { includeHarnessIdentity: false, includeRuntimeContext: false }
+- name: '@deepseek-ai/dsh-tools'
+- name: '@deepseek-ai/dsh-agent'
+- name: '@deepseek-ai/dsh-agent-loop'
+  config: { agents: [] }
+- name: '@deepseek-ai/dsh-webwjkj/default-agent'
+  config: { timeoutMs: ${timeoutMs}, historyMessages: 32, maxTokens: 2048, maxAiMessages: 100 }
+` : ''
   await writeFile(file, `- name: '@deepseek-ai/dsh-storage'
 - name: '@deepseek-ai/dsh-storage-json'
   config: { root: ${JSON.stringify(join(root, 'im'))} }
@@ -54,7 +109,7 @@ async function harness(localTestAccount = false) {
   config: { backend: json }
 - name: '@deepseek-ai/dsh-im'
   config: { maxParticipants: 20, maxConversations: 20, maxMessages: 100, maxTextBytes: 16384, maxAttachmentBytes: 1048576, maxAttachments: 10 }
-- name: '@deepseek-ai/dsh-host-webserver'
+${agentRows}- name: '@deepseek-ai/dsh-host-webserver'
   config: { host: 127.0.0.1, port: 0 }
 - name: '@deepseek-ai/dsh-webwjkj'
   config:
@@ -71,6 +126,17 @@ async function harness(localTestAccount = false) {
   await ctx.plugin(Loader)
   ctx.loader.builtins.include = Include
   const modules = new Map<string, unknown>([['@deepseek-ai/dsh-storage', Storage], ['@deepseek-ai/dsh-storage-json', JsonStorage], ['@deepseek-ai/dsh-storage-domain', StorageDomain], ['@deepseek-ai/dsh-im', Im], ['@deepseek-ai/dsh-host-webserver', WebServer], ['@deepseek-ai/dsh-webwjkj', Homepage]])
+  for (const [name, plugin] of Object.entries({
+    '@deepseek-ai/dsh-llm': Llm, '@deepseek-ai/dsh-agent-default-model': AgentDefaultModel,
+    '@deepseek-ai/dsh-session': SessionStore, '@deepseek-ai/dsh-session-persistence-jsonl': SessionPersistence,
+    '@deepseek-ai/dsh-session-projection': SessionProjections, '@deepseek-ai/dsh-system-prompt': SystemPrompt,
+    '@deepseek-ai/dsh-tools': Tools, '@deepseek-ai/dsh-agent': AgentRegistry, '@deepseek-ai/dsh-agent-loop': AgentLoop,
+    '@deepseek-ai/dsh-webwjkj/default-agent': DefaultAgent,
+    'test-model': { name: 'test-model', inject: ['llm'], apply(ctx: Context) {
+      if (!model) throw new Error('Missing test model')
+      ctx.effect(() => ctx.llm.registerAdapter(['test'], model))
+    } },
+  })) modules.set(name, plugin)
   ctx.loader.internal = { version: 'v2', async import(name: string) {
     if (!modules.has(name)) throw new Error(`Unexpected module ${name}`)
     return modules.get(name)
@@ -102,7 +168,7 @@ async function harness(localTestAccount = false) {
 it('logs in once, persists a UUID profile and verified email, and rejects unsafe account mutations', async () => {
   const app = await harness()
   const browser = app.browser()
-  expect((await browser.request('/account')).location).toBe('/login?lang=zh')
+  expect((await browser.request('/account/settings')).location).toBe('/login?lang=zh')
   const sent = await browser.request('/account/sms/send', { phone: '13800138000' })
   expect(sent.status, sent.body).toBe(200)
   const code = delivery.sms.get('+8613800138000')!
@@ -117,22 +183,29 @@ it('logs in once, persists a UUID profile and verified email, and rejects unsafe
   expect((await app.browser().request('/workspace/assets/client.js')).status).toBe(303)
   expect(verified.cookies.join(';')).toContain('HttpOnly')
   expect((await browser.request('/account/sms/verify', { phone: '13800138000', code })).status).toBe(400)
-  const account = await browser.request('/account')
+  const securityNavigation = await browser.request('/account?lang=zh')
+  expect({ status: securityNavigation.status, location: securityNavigation.location }).toMatchInlineSnapshot(`
+    {
+      "location": "/workspace?lang=zh&panel=security",
+      "status": 303,
+    }
+  `)
+  const account = await browser.request('/account/settings')
   const id = /<code>([a-f0-9-]+)<\/code>/.exec(account.body)![1]!
   expect(id).toMatch(/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/)
   expect((await browser.request('/account/profile', { name: '<img onerror=alert(1)>', image: 'https://example.test/avatar.png' })).status).toBe(200)
-  expect((await browser.request('/account')).body).toContain('&lt;img onerror=alert(1)&gt;')
+  expect((await browser.request('/account/settings')).body).toContain('&lt;img onerror=alert(1)&gt;')
   expect((await browser.request('/account/profile', { name: 'name', image: 'javascript:alert(1)' })).status).toBe(400)
   expect((await browser.request('/account/profile', { name: 'name', image: '' }, true)).status).toBe(403)
   expect((await browser.request('/account/email/send', { newEmail: 'person@example.test' })).status).toBe(200)
   const emailCode = delivery.email.get('person@example.test')!
   expect((await browser.request('/account/email/verify', { newEmail: 'person@example.test', otp: emailCode })).status).toBe(200)
-  expect((await browser.request('/account')).body).toContain('person@example.test')
-  expect((await browser.request('/account')).body).toContain(id)
+  expect((await browser.request('/account/settings')).body).toContain('person@example.test')
+  expect((await browser.request('/account/settings')).body).toContain(id)
   expect((await browser.request('/account/email/verify', { newEmail: 'person@example.test', otp: emailCode })).status).toBe(400)
   expect((await browser.request('/api/auth/sign-up/email', {})).status).toBe(404)
   expect((await browser.request('/account/logout', {})).status).toBe(303)
-  expect((await browser.request('/account')).status).toBe(303)
+  expect((await browser.request('/account/settings')).status).toBe(303)
   await app.ctx.fiber.dispose()
   const restarted = await harness()
   const db = new DatabaseSync(join(root!, 'accounts.sqlite'), { readOnly: true })
@@ -167,7 +240,7 @@ it('binds WeChat through provider exchange and refuses callbacks without matchin
   const result = await browser.request(`/api/auth/callback/wechat?code=provider-code&state=${encodeURIComponent(state)}`)
   expect(result.status, result.body).toBe(303)
   expect(calls).toBe(2)
-  expect((await browser.request('/account')).body).toContain('已绑定')
+  expect((await browser.request('/account/settings')).body).toContain('已绑定')
   expect((await browser.request('/account/wechat', {})).status).toBe(409)
   await browser.request(`/api/auth/callback/wechat?code=provider-code&state=${encodeURIComponent(state)}`)
   expect(calls).toBe(2)
@@ -212,7 +285,7 @@ it('creates an email identity and enables password and phone login for the same 
   const code = delivery.email.get('login@example.test')!
   expect((await browser.request('/account/login/email/verify', { email: 'login@example.test', otp: '000000' === code ? '111111' : '000000' })).status).toBe(400)
   expect((await browser.request('/account/login/email/verify', { email: 'login@example.test', otp: code })).location).toBe('/workspace?lang=zh')
-  const account = await browser.request('/account')
+  const account = await browser.request('/account/settings')
   const id = /<code>([a-f0-9-]+)<\/code>/.exec(account.body)![1]!
   expect((await browser.request('/account/username', { username: 'test.user' })).status).toBe(200)
   const password = 'testing-password-only-1234'
@@ -221,11 +294,11 @@ it('creates an email identity and enables password and phone login for the same 
   expect((await browser.request('/account/password', { currentPassword: 'wrong-password-123', newPassword: 'changed-password-123' })).status).toBeGreaterThanOrEqual(400)
   expect((await browser.request('/account/phone/send', { phone: '13800138000' })).status).toBe(200)
   expect((await browser.request('/account/phone/verify', { phone: '13800138000', code: delivery.sms.get('+8613800138000')! })).status).toBe(303)
-  expect((await browser.request('/account')).body).toContain(id)
+  expect((await browser.request('/account/settings')).body).toContain(id)
   await browser.request('/account/logout', {})
   expect((await browser.request('/account/login/password', { username: 'test.user', password: 'wrong-password-123' })).status).toBeGreaterThanOrEqual(400)
   expect((await browser.request('/account/login/password', { username: 'TEST.USER', password })).location).toBe('/workspace?lang=zh')
-  expect((await browser.request('/account')).body).toContain(id)
+  expect((await browser.request('/account/settings')).body).toContain(id)
   const anonymous = app.browser()
   expect((await anonymous.request('/account/password', { newPassword: password })).status).toBe(303)
   const db = new DatabaseSync(join(root!, 'accounts.sqlite'), { readOnly: true })
@@ -253,7 +326,7 @@ it('creates and reuses a WeChat login identity without requiring a phone session
     const state = new URL(start.location!).searchParams.get('state')!
     const callback = await browser.request(`/api/auth/callback/wechat?code=provider-code&state=${encodeURIComponent(state)}`)
     expect(callback.location, callback.body).toBe('/workspace?lang=zh')
-    const account = await browser.request('/account')
+    const account = await browser.request('/account/settings')
     const current = /<code>([a-f0-9-]+)<\/code>/.exec(account.body)![1]!
     if (id) expect(current).toBe(id)
     id = current
@@ -296,7 +369,7 @@ it('seeds a local admin once, preserves changed passwords, and keeps it out of o
   const local = await harness(true)
   const browser = local.browser()
   expect((await browser.request('/account/login/password', { username: 'admin', password: '123123' })).location).toBe('/workspace?lang=zh')
-  const account = await browser.request('/account')
+  const account = await browser.request('/account/settings')
   const id = /<code>([a-f0-9-]+)<\/code>/.exec(account.body)![1]!
   expect((await browser.request('/account/password', { currentPassword: '123123', newPassword: 'local-changed-password' })).status).toBe(200)
   await local.ctx.fiber.dispose()
@@ -304,7 +377,7 @@ it('seeds a local admin once, preserves changed passwords, and keeps it out of o
   const client = restarted.browser()
   expect((await client.request('/account/login/password', { username: 'admin', password: '123123' })).status).toBeGreaterThanOrEqual(400)
   expect((await client.request('/account/login/password', { username: 'admin', password: 'local-changed-password' })).status).toBe(303)
-  expect((await client.request('/account')).body).toContain(id)
+  expect((await client.request('/account/settings')).body).toContain(id)
   await restarted.ctx.fiber.dispose()
   const ordinary = await harness()
   expect((await ordinary.browser().request('/account/login/password', { username: 'admin', password: '123123' })).status).toBeGreaterThanOrEqual(400)
@@ -326,7 +399,7 @@ it('projects only the signed-in user’s IM contacts, groups, and permitted conv
   await alice.request('/account/login/password', { username: 'admin', password: '123123' })
   await bob.request('/account/sms/send', { phone: '13800138000' })
   await bob.request('/account/sms/verify', { phone: '13800138000', code: delivery.sms.get('+8613800138000')! })
-  const accountId = async (browser: ReturnType<typeof app.browser>) => Im.participantIdSchema.parse(`webwjkj:${/<code>([a-f0-9-]+)<\/code>/.exec((await browser.request('/account')).body)![1]!}`)
+  const accountId = async (browser: ReturnType<typeof app.browser>) => Im.participantIdSchema.parse(`webwjkj:${/<code>([a-f0-9-]+)<\/code>/.exec((await browser.request('/account/settings')).body)![1]!}`)
   const a = await accountId(alice), b = await accountId(bob)
   expect((await alice.request('/account/im')).status).toBe(200)
   expect((await bob.request('/account/im')).status).toBe(200)
@@ -371,7 +444,7 @@ it('discovers exact verified identities and persists recipient-approved friendsh
   async function login(browser: ReturnType<typeof app.browser>, phone: string): Promise<string> {
     await browser.request('/account/sms/send', { phone })
     expect((await browser.request('/account/sms/verify', { phone, code: delivery.sms.get(`+86${phone}`)! })).status).toBe(303)
-    return /<code>([a-f0-9-]+)<\/code>/.exec((await browser.request('/account')).body)![1]!
+    return /<code>([a-f0-9-]+)<\/code>/.exec((await browser.request('/account/settings')).body)![1]!
   }
   const aliceId = await login(alice, '13800138101')
   const bobId = await login(bob, '13800138102')
@@ -467,4 +540,86 @@ it('provides the default agent and creates private groups only from the caller�
   const restarted = await harness(true), restored = restarted.browser()
   await restored.request('/account/login/password', { username: 'admin', password: '123123' })
   expect((await restored.request(history)).status).toBe(200)
+})
+
+it('replies to default-agent messages with isolated history, durable retries, and visible provider failures', async () => {
+  const model = new ReplyModel()
+  const app = await harness(true, model)
+  const browser = app.browser()
+  expect((await browser.request('/account/login/password', { username: 'admin', password: '123123' })).status).toBe(303)
+  const path = '/account/im/message?kind=contact&id=webwjkj%3Adefault-agent'
+  const first = { text: '你好，记住我的暗号：蓝色风筝', messageId: 'aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa' }
+  const response = await browser.request(path, first)
+  expect(response.status).toBe(200)
+  const history = JSON.parse(response.body)
+  expect(history.agentError).toBeUndefined()
+  expect(history.messages.map(({ sender, text, own }: { sender: string; text: string; own: boolean }) => ({ sender, text, own }))).toMatchInlineSnapshot(`
+    [
+      {
+        "own": true,
+        "sender": "admin",
+        "text": "你好，记住我的暗号：蓝色风筝",
+      },
+      {
+        "own": false,
+        "sender": "default agent",
+        "text": "你好，我是 default agent。",
+      },
+    ]
+  `)
+  expect(JSON.parse((await browser.request(path, first)).body).messages).toHaveLength(2)
+  expect(model.requests).toHaveLength(1)
+  expect(model.requests[0]?.tools ?? []).toHaveLength(0)
+  await browser.request(path, { text: '我的暗号是什么？', messageId: 'bbbbbbbb-bbbb-4bbb-abbb-bbbbbbbbbbbb' })
+  expect(JSON.stringify(model.requests[1]?.messages)).toContain('蓝色风筝')
+  expect(JSON.stringify(model.requests[1]?.messages)).toContain('你好，我是 default agent。')
+  const second = app.browser()
+  await second.request('/account/sms/send', { phone: '13800138001' })
+  await second.request('/account/sms/verify', { phone: '13800138001', code: delivery.sms.get('+8613800138001')! })
+  await second.request(path, { text: '另一个账号', messageId: 'cccccccc-cccc-4ccc-accc-cccccccccccc' })
+  expect(JSON.stringify(model.requests[2]?.messages)).not.toContain('蓝色风筝')
+  model.fail = true
+  const retry = { text: '服务恢复后重试', messageId: 'dddddddd-dddd-4ddd-addd-dddddddddddd' }
+  expect(JSON.parse((await browser.request(path, retry)).body).agentError).toBe(true)
+  model.fail = false
+  const recovered = JSON.parse((await browser.request(path, retry)).body)
+  expect(recovered.agentError).toBeUndefined()
+  expect(recovered.messages.filter((message: { text: string }) => message.text === retry.text)).toHaveLength(1)
+  await app.ctx.fiber.dispose()
+  const restarted = await harness(true, model)
+  const returning = restarted.browser()
+  await returning.request('/account/login/password', { username: 'admin', password: '123123' })
+  const count = model.requests.length
+  expect(JSON.parse((await returning.request(path, retry)).body).messages).toEqual(recovered.messages)
+  expect(model.requests).toHaveLength(count)
+})
+
+it('aborts a timed-out default-agent request and leaves its durable message retryable', async () => {
+  const model = new ReplyModel()
+  model.hold = true
+  const app = await harness(true, model, 100)
+  const browser = app.browser()
+  await browser.request('/account/login/password', { username: 'admin', password: '123123' })
+  const response = await browser.request('/account/im/message?kind=contact&id=webwjkj%3Adefault-agent', {
+    text: 'timeout', messageId: 'eeeeeeee-eeee-4eee-aeee-eeeeeeeeeeee',
+  })
+  expect(JSON.parse(response.body).agentError).toBe(true)
+  expect(model.requests[0]?.signal?.aborted).toBe(true)
+})
+
+it('drains active default-agent requests when its plugin is disposed', async () => {
+  const model = new ReplyModel()
+  model.hold = true
+  const app = await harness(true, model)
+  const browser = app.browser()
+  await browser.request('/account/login/password', { username: 'admin', password: '123123' })
+  const response = browser.request('/account/im/message?kind=contact&id=webwjkj%3Adefault-agent', {
+    text: 'shutdown', messageId: 'ffffffff-ffff-4fff-afff-ffffffffffff',
+  })
+  // Root disposal also closes HTTP sockets; observe that rejection before teardown.
+  const settled = response.then(() => {}, (error: unknown) => { expect(error).toBeInstanceOf(TypeError) })
+  await model.entered.promise
+  await app.ctx.fiber.dispose()
+  await settled
+  expect(model.requests[0]?.signal?.aborted).toBe(true)
 })

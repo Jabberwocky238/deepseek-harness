@@ -35,6 +35,45 @@
     },
     {
       "path": "../../storage/storage-domain"
+    },
+    {
+      "path": "../../core/agent"
+    },
+    {
+      "path": "../../core/agent-loop"
+    },
+    {
+      "path": "../../core/agent-default-model"
+    },
+    {
+      "path": "../../core/session"
+    },
+    {
+      "path": "../../session/session-persistence"
+    },
+    {
+      "path": "../../session/session-persistence-jsonl"
+    },
+    {
+      "path": "../../session/session-projection"
+    },
+    {
+      "path": "../../core/system-prompt"
+    },
+    {
+      "path": "../../core/tools"
+    },
+    {
+      "path": "../../llm/llm"
+    },
+    {
+      "path": "../../llm/llm-deepseek"
+    },
+    {
+      "path": "../../settings/settings-file"
+    },
+    {
+      "path": "../../credentials/credentials-local"
     }
   ],
   "exclude": [

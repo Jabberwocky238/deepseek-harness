@@ -15,6 +15,10 @@
     "./client": {
       "types": "./lib/types/client/index.d.ts",
       "default": "./lib/client.js"
+    },
+    "./default-agent": {
+      "types": "./lib/types/default-agent.d.ts",
+      "default": "./lib/default-agent.js"
     }
   },
   "files": [
@@ -23,7 +27,8 @@
     "cordis.patch.yml",
     "lib/types/**/*.d.ts",
     "lib/client.css",
-    "lib/workbench"
+    "lib/workbench",
+    "lib/default-agent.js"
   ],
   "license": "MIT",
   "dsh": {
@@ -44,7 +49,20 @@
     "better-auth": "1.7.4",
     "nodemailer": "^10.0.8",
     "tencentcloud-sdk-nodejs-sms": "^4.1.306",
-    "zod": "^4.4.3"
+    "zod": "^4.4.3",
+    "@deepseek-ai/dsh-agent": "workspace:^",
+    "@deepseek-ai/dsh-agent-loop": "workspace:^",
+    "@deepseek-ai/dsh-agent-default-model": "workspace:^",
+    "@deepseek-ai/dsh-session": "workspace:^",
+    "@deepseek-ai/dsh-session-persistence": "workspace:^",
+    "@deepseek-ai/dsh-session-persistence-jsonl": "workspace:^",
+    "@deepseek-ai/dsh-session-projection": "workspace:^",
+    "@deepseek-ai/dsh-system-prompt": "workspace:^",
+    "@deepseek-ai/dsh-tools": "workspace:^",
+    "@deepseek-ai/dsh-llm": "workspace:^",
+    "@deepseek-ai/dsh-llm-deepseek": "workspace:^",
+    "@deepseek-ai/dsh-settings-file": "workspace:^",
+    "@deepseek-ai/dsh-credentials-local": "workspace:^"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "workspace:^"

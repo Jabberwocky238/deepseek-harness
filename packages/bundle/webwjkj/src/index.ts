@@ -2,6 +2,7 @@
 import type { Context } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/dsh-host-webserver'
 import type {} from '@deepseek-ai/dsh-im'
+import type {} from './default-agent.ts'
 import { workspaceAssets } from './workspace-assets.ts'
 import { fileURLToPath } from 'node:url'
 import { readImView } from './im-view.ts'
@@ -63,7 +64,7 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
               const work = handleAccount(runtime, req, res, async (user, url, form) => {
                 const im = ctx.get('im')
                 if (!im) throw new Error('webwjkj requires IM for the contact directory')
-                return readImView(im, user, url, await runtime.acceptedFriends(user.id), form)
+                return readImView(im, user, url, await runtime.acceptedFriends(user.id), form, ctx.get('webwjkjAgent')?.reply)
               }, assets)
               pending.add(work)
               void work.then(() => pending.delete(work), () => pending.delete(work))

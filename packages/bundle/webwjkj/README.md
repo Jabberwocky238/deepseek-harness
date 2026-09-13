@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-webwjkj is an independent web application with a public homepage, SMS, password, email, and WeChat login, UUID profiles, email and WeChat binding, and an authenticated multi-panel workbench. It uses a dedicated profile without the official Web application or model credentials.
+webwjkj is an independent web application with a public homepage, SMS, password, email, and WeChat login, UUID profiles, email and WeChat binding, and an authenticated multi-panel workbench. It uses a dedicated profile without the official Web application; browsing and account login do not require model credentials.
 
 ## Table of Contents
 
@@ -49,7 +49,7 @@ Override the `webwjkj-server` row in the profile’s `cordis.patch.yml` to chang
 
 The `/login` page switches between SMS and password forms through text tabs, with email and WeChat icons below for the other methods. Only the selected form is visible. Each successful login opens `/workspace`. First phone, email, or WeChat verification creates a UUID user; configure a 3–30 character login username and 12–128 character password in `/account` to enable password login. Changing an existing password requires the current password. Phone, email, and WeChat identities can be verified and bound in account settings; linked identities sign in to the same UUID. Unlinked identities are not automatically merged.
 
-The activity bar places Profile directly above Settings at the bottom left. Profile opens a native dialog with account details and editing; signing out returns to login. Selecting a contact or group opens a conversation tab with text history and a message composer. Every account has a `default agent` contact. IM messages and groups persist through the shared storage service in `$DSH_HOME/webwjkj/im`.
+The activity bar places Profile directly above Settings at the bottom left. Profile opens a native dialog with account details and editing; signing out returns to login. Account and security opens an editor tab with the workbench theme, category navigation, and inline form results. Direct `/account` links open that tab; WeChat authorization returns there after binding. Selecting a contact or group opens a conversation tab with text history and a message composer. Every account has a `default agent` contact. Sending it a direct message runs the configured model and displays its reply. The default selection uses the shared `agent-default-model` settings, falling back to the profile’s `deepseek-official / deepseek-flash` selection. The DeepSeek adapter uses the shared settings and credential provider, including `DEEPSEEK_API_KEY`. IM messages and groups persist through the shared storage service in `$DSH_HOME/webwjkj/im`.
 
 The application uses the cloned VS Code grid, splitter, action-bar, icon, and dialog UI sources. webwjkj owns tabs, contact lists, message panels, and settings. The Contacts activity opens the combined contact/group list, most recent communication first. Lower and right work areas start closed and open empty; tabs can be dragged between them. There is no status bar, VS Code Chat, terminal, command palette, file explorer, extension installation, remote execution, or extension host.
 
@@ -102,7 +102,7 @@ Accounts and login sessions persist in `$DSH_HOME/webwjkj/accounts.sqlite`; the 
 <details>
 <summary>Implementation internals — click to expand</summary>
 
-The [patch](cordis.patch.yml) mounts the HTTP carrier, page plugin, JSON storage, and IM service. Accounts use Better Auth and Node SQLite; the official Tencent SDK sends SMS, SMTP verifies email, and WeChat endpoints exchange authorization codes and retrieve profiles. A cross-process file lock serializes account operations against concurrent OTP consumption; database versions advance monotonically.
+The [patch](cordis.patch.yml) mounts the HTTP carrier, page plugin, JSON storage, IM service, and a model kernel with an empty tool registry. The [default-agent consumer](src/default-agent.ts) serializes replies within each direct conversation and logs each model turn under `$DSH_HOME/webwjkj/sessions`. It supplies at most the configured recent-message count from that conversation, and forwards completed text to IM. Message-derived reply IDs make successful retries idempotent. Model failures preserve the user message and expose retry feedback in the chat. Configured timeouts and plugin disposal abort and drain active turns. Accounts use Better Auth and Node SQLite; the official Tencent SDK sends SMS, SMTP verifies email, and WeChat endpoints exchange authorization codes and retrieve profiles. A cross-process file lock serializes account operations against concurrent OTP consumption; database versions advance monotonically.
 
 Homepage and account forms render on the server; the browser loads webwjkj and the UI-only source bundle through separate Host and Client compiler configurations. The UI asset manifest admits exact output filenames and hashes; old workbench and extension routes return 404. Workspace scripts cannot execute inline code, evaluate code strings, or create workers or frames under their CSP. Account routes check sessions and mutation origins. Unloading removes routes, drains requests, and closes the database. No invariant companion is published: SQLite uniqueness constraints and authentication operations directly maintain account relationships without independent copies to cross-check.
 
@@ -122,25 +122,25 @@ Homepage and account forms render on the server; the browser loads webwjkj and t
 <a id="model-experience"></a>
 ## Model Experience
 
-### Homepage
+### Default-agent chat
 
 #### What the model sees
 
-None; `GET /` and `GET /en` serve browser-only HTML. This application mounts no agent, model, tool, or Session service.
+The default agent receives a JSON array of recent messages from the authorized direct conversation, in chronological order, with role and text fields. The complete input and model response are logged in a dedicated Session. The profile provides no execution or filesystem tools; unrelated accounts and conversations are excluded. Public homepage and authentication requests do not invoke the model.
 
 #### Token effect
 
-None; no model context is added.
+Each send includes up to `historyMessages` recent messages and limits output to `maxTokens`; both values are configured on `webwjkj-default-agent`.
 
 #### KV Cache effect
 
-None; there are no model requests.
+Each reply uses a fresh logged Session with a bounded conversation window. Provider prefix caching can apply; the application does not promise a reusable prefix as the window advances.
 
 ## Known Limitations and Deferred Work
 
 <a id="known-limitations-and-deferred-work"></a>
 
-- The default agent entry opens a conversation and stores messages; this bundle does not start a model provider or generate agent replies. Open tabs and pane positions are not restored across page reloads. Theme choice persists in the browser and does not synchronize across devices. SMS, email, and WeChat require provider configuration; local tests replace external services and do not prove live delivery. Rebuild the UI source before launching after source changes.
+- Default-agent replies support direct text chats; group automation, streaming partial replies, and attachments are not enabled. Each request uses the configured recent history window; older messages remain visible in IM but are outside the model context. Open tabs and pane positions are not restored across page reloads. Theme choice persists in the browser and does not synchronize across devices. SMS, email, and WeChat require provider configuration; local tests replace external services and do not prove live delivery. Rebuild the UI source before launching after source changes.
 
 <a id="dev-note"></a>
 ### Dev Note

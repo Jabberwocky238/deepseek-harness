@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { randomUUID } from '@deepseek-ai/dsh-util-crypto'
 import { locale, t } from './copy.ts'
 import { node, type Ui, type View, type Disposable } from './ui.ts'
+import { renderSecurity } from './security.ts'
 const selection = z.object({ id: z.string(), name: z.string(), kind: z.enum(['contact', 'group']) })
 const directorySchema = z.object({ entries: z.array(selection) })
 const profileSchema = z.object({ id: z.uuid(), name: z.string(), image: z.string().nullable() })
@@ -13,6 +14,7 @@ const inboxSchema = z.object({
   })),
 })
 const historySchema = z.object({
+  agentError: z.boolean().optional(),
   messages: z.array(z.object({ sender: z.string(), text: z.string(), own: z.boolean() })),
 })
 type Selection = z.infer<typeof selection>
@@ -29,7 +31,7 @@ type Group = {
   active?: string | undefined
 }
 const userId = z.uuid().parse(document.body.dataset['userId'])
-async function request(path: string, form?: Record<string, string>): Promise<Response> {
+async function request(path: string, form?: Record<string, string>, allowFailure = false): Promise<Response> {
   const result = await fetch(path, {
     credentials: 'same-origin', cache: 'no-store', ...form ? { method: 'POST', body: new URLSearchParams({ ...form, lang: locale }) } : {},
   })
@@ -37,7 +39,7 @@ async function request(path: string, form?: Record<string, string>): Promise<Res
     location.assign(`/login?lang=${locale}`)
     throw new Error('Login required')
   }
-  if (!result.ok)
+  if (!result.ok && !allowFailure)
     throw new Error('Account operation failed')
   return result
 }
@@ -307,7 +309,8 @@ async function boot(): Promise<void> {
         const query = new URLSearchParams({ kind: item.kind, id: item.id })
         function history(data: unknown): void {
           messages.replaceChildren()
-          const records = historySchema.parse(data).messages
+          const parsed = historySchema.parse(data)
+          const records = parsed.messages
           for (const record of records) {
             const article = node('article', record.own ? 'own' : '')
             article.append(node('small', '', record.sender), node('p', '', record.text))
@@ -316,22 +319,32 @@ async function boot(): Promise<void> {
 
           if (!records.length)
             messages.append(node('p', 'muted', t.noMessages))
+          if (parsed.agentError) messages.append(node('p', 'muted', t.agentFailed))
           messages.scrollTop = messages.scrollHeight
         }
         history(await json(`/account/im/history?${query}`))
+        let pendingMessage: { text: string; id: string } | undefined
         composer.onsubmit = (event) => {
           event.preventDefault()
           if (!input.value.trim())
             return
           send.disabled = true
+          input.disabled = true
+          if (!pendingMessage || pendingMessage.text !== input.value) pendingMessage = { text: input.value, id: randomUUID() }
+          const submitted = pendingMessage
+          const waiting = node('p', 'muted', t.agentThinking)
+          if (item.id === 'webwjkj:default-agent') messages.append(waiting)
           run(async () => {
             try {
-              history(await json(`/account/im/message?${query}`, { text: input.value, messageId: randomUUID() }))
-              input.value = ''
+              const data = historySchema.parse(await json(`/account/im/message?${query}`, { text: submitted.text, messageId: submitted.id }))
+              history(data)
+              if (!data.agentError) { input.value = ''; pendingMessage = undefined }
               await refresh()
             }
             finally {
+              waiting.remove()
               send.disabled = false
+              input.disabled = false
             }
           })
         }
@@ -417,6 +430,9 @@ async function boot(): Promise<void> {
     await refresh()
     openChat(group)
   }
+  function security(): void {
+    open({ id: 'security', title: t.security, render: element => renderSecurity(element, request) })
+  }
   async function profile(): Promise<void> {
     const account = accountSchema.parse(await json('/account/me'))
     const result = await dialog(t.profile, [t.edit, t.security, t.logout, t.close], undefined, undefined, (body) => {
@@ -446,7 +462,7 @@ async function boot(): Promise<void> {
       }
     }
     else if (result.button === 1)
-      location.assign(`/account?lang=${locale}#security`)
+      security()
     else if (result.button === 2) {
       await request('/account/logout', {})
       location.assign(`/login?lang=${locale}`)
@@ -464,7 +480,7 @@ async function boot(): Promise<void> {
       }
     }
     else if (result.button === 3)
-      location.assign(`/account?lang=${locale}#security`)
+      security()
   }
   icons(activities, [
     {
@@ -509,6 +525,7 @@ async function boot(): Promise<void> {
       disposable.dispose()
   }, { once: true })
   await refresh()
+  if (new URLSearchParams(location.search).get('panel') === 'security') security()
 }
 void boot().catch((error: unknown) => {
   console.error(error)

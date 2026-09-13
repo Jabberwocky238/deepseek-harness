@@ -23,6 +23,18 @@
     },
     {
       "path": "../../../vendor/schemastery"
+    },
+    {
+      "path": "../../interaction/im"
+    },
+    {
+      "path": "../../storage/storage"
+    },
+    {
+      "path": "../../storage/storage-json"
+    },
+    {
+      "path": "../../storage/storage-domain"
     }
   ],
   "exclude": [

@@ -149,11 +149,13 @@ export class ImService {
         if (used >= conversation.maxAiMessages) throw new Error('IM conversation AI message budget exhausted')
       }
       let sequence = 1
+      let activityOrder = 1
       for (const [, row] of table.entries()) {
         if (row.conversation === input.conversation) sequence = Math.max(sequence, row.sequence + 1)
+        activityOrder = Math.max(activityOrder, row.activityOrder + 1)
       }
       const created: ImMessage = {
-        ...structuredClone(input), sequence,
+        ...structuredClone(input), sequence, activityOrder,
         deliveries: Object.fromEntries(input.recipients.map(id => [id, 'pending' as const])),
       }
       await table.put(created.id, created)
@@ -161,6 +163,22 @@ export class ImService {
     })
     for (const recipient of message.recipients) this.schedule(message, recipient)
     return structuredClone(message)
+  }
+
+  /**
+   * Read latest durable activity for conversations joined by this member in one namespace.
+   * @param member - identity whose group membership authorizes these activity records.
+   * @param namespace - application namespace restricting the conversation set.
+   * @returns a detached map of conversation IDs to commit order; zero denotes no known activity.
+   */
+  conversationActivity(member: ParticipantId, namespace: string): ReadonlyMap<ConversationId, number> {
+    const result = new Map(this.conversations(member, namespace)
+      .filter(room => room.members.includes(member)).map(room => [room.id, 0]))
+    for (const [, message] of this.domain.table('messages').entries()) {
+      const order = result.get(message.conversation)
+      if (order !== undefined) result.set(message.conversation, Math.max(order, message.activityOrder))
+    }
+    return result
   }
 
   /**

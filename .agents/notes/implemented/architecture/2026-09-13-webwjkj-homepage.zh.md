@@ -10,7 +10,7 @@ webwjkj 需要独立开发的首页，不继承官方 Web 应用的聊天界面�
 
 ## Decision
 
-[webwjkj bundle](../../../../packages/bundle/webwjkj/README.zh.md) 自行维护首页、类型化语言字典和响应式样式。完整插件树仅包含现有 HTTP 服务和一个页面插件。应用通过专用 dsh profile 启动，遵循[应用启动规则](../../../../docs/architecture.zh.md)。
+[webwjkj bundle](../../../../packages/bundle/webwjkj/README.zh.md) 自行维护首页、类型化语言字典和响应式样式。首页使用现有 HTTP 服务和一个页面插件；bundle 另挂载存储与 IM 服务供认证工作台使用。应用通过专用 dsh profile 启动，遵循[应用启动规则](../../../../docs/architecture.zh.md)。
 
 ## Alternatives considered
 

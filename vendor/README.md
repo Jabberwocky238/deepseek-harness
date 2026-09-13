@@ -6,6 +6,8 @@ All vendored packages are **renamed into the `@deepseek-ai` scope** (`cordis` �
 
 This file covers the manifest, the local-modification log, and the procedure for **updating** an existing vendored package. To **add a new** one, see the cookbook guide: [docs/cookbook/adding-a-vendored-package.md](../docs/cookbook/adding-a-vendored-package.md).
 
+The separate [webwjkj UI source](webwjkj/README.md) retains a browser-only subset of cloned VS Code source. It is not an npm workspace and does not participate in the Cordis package rescoping below. Its revisions and direct source changes are recorded in that directory.
+
 ## Manifest
 
 Upstream workspace: `cordis-workspace` (local checkout: `~/repos/cordis-workspace`).
@@ -49,6 +51,8 @@ Keep this log exhaustive — every divergence from upstream must be listed.
 17. **`@deepseek-ai` rescope**: every vendored manifest `name`, every internal dependency entry among the vendored set, and every module specifier that reaches them use the scoped names in the manifest table's `npm name` column. Directory names, version numbers, and dependency ranges are unchanged, and no upstream runtime identifier is renamed — `Symbol.for('schemastery')` and Schemastery's `vendor:` metadata field keep their upstream values. Re-apply with `pnpm run rescope-vendor --apply` after a sync; the table's two name columns are the mapping, restated for consumers in [docs/rescope.md](../docs/rescope.md).
 18. **Entry `disabled` interpolation in `loader/src/config/entry.ts`**: a `disabled: !!js` expression evaluates against the loader context at every mount decision; the raw node stays in the options, so write-back keeps the `!!js` form. `disabled` is the only interpolated metadata field. Covered by `packages/boot/app-boot/tests/user-patches.spec.ts` and `apps/cli/tests/windows-shell.spec.ts`.
 19. **`loader/src/internal.ts` runtime shape detection**: `ModuleLoader.fromInternal()` classifies the internal loader by which module-job API it owns — `getOrCreateModuleJob` for v2, `getModuleJobForImport` for v1 — instead of by Node major version. Upstream tags every major `>= 24` as v2, but the v2 interface arrived in Node 24.12.0, so 24.0–24.11.1 report major 24 while still carrying the v1 loader; consumers then called `resolveSync` with reversed parameters and every call threw. `dsh web` served an empty client graph (`__DSH_BOOT__.entries: []`) and HMR partial reload resolved no entry URL, both behind swallowed or warn-level errors. Arity cannot discriminate the two shapes, because each reports `resolveSync.length === 2`. A loader owning neither API is left unclassified rather than guessed, so consumers take their documented no-internals path. Covered on the `node-compat` Node version matrix, which pins 24.9 for the mistagged range.
+
+20. **`webwjkj/` UI source subset**: cloned code-server `b11dabdaca0d3369986975be285db92c8795cea5` and VS Code `645f29cc3176500b4b5762ba887cf2a7f0ffdf2c`, retained the browser UI dependency closure and licenses, and added `vscode/src/vs/webwjkj/ui.ts` for widget exports, dialog colors, and icon glyph styles. `CODICONS-LICENSE` covers the font from `@vscode/codicons` `0.0.46-39`. Trailing whitespace in `CODICONS-LICENSE` and the extra final blank line in `vscode/src/vs/base/common/observableInternal/transaction.ts` are normalized for the repository whitespace check; other retained upstream source is unchanged. The source build rejects workbench, editor, server, and extension-host dependencies. [Source record](webwjkj/README.md).
 
 ## Sync procedure
 

@@ -1,6 +1,10 @@
 /** Standalone webwjkj homepage routes over the shared HTTP carrier. */
 import type { Context } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/dsh-host-webserver'
+import type {} from '@deepseek-ai/dsh-im'
+import { workspaceAssets } from './workspace-assets.ts'
+import { fileURLToPath } from 'node:url'
+import { readImView } from './im-view.ts'
 import { renderHomepage } from './homepage.ts'
 import type { Locale } from './locales.ts'
 import { Config } from './auth-config.ts'
@@ -44,6 +48,8 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
     }))
   }
   if (config.auth) {
+    if (config.auth.localTestAccount && ctx.webServer.host !== '127.0.0.1') throw new Error('webwjkj: local test account requires a loopback listener')
+    const assets = config.workbenchRoot ? await workspaceAssets(config.workbenchRoot === 'bundled' ? fileURLToPath(new URL('./lib/workbench/', import.meta.resolve('@deepseek-ai/dsh-webwjkj/package.json'))) : config.workbenchRoot) : undefined
     const runtime = await createAccountRuntime(config.auth)
     const pending = new Set<Promise<void>>()
     try {
@@ -54,7 +60,11 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
           for (const [path, kind] of [['/account', 'prefix'], ['/login', 'exact'], ['/workspace', 'prefix'], ['/api/auth/callback/wechat', 'exact']] as const) {
             disposers.push(ctx.webServer.register({ kind, path, handler(req, res) {
               if (!accepting) { res.writeHead(503); res.end(); return }
-              const work = handleAccount(runtime, req, res)
+              const work = handleAccount(runtime, req, res, async (user, url, form) => {
+                const im = ctx.get('im')
+                if (!im) throw new Error('webwjkj requires IM for the contact directory')
+                return readImView(im, user, url, await runtime.acceptedFriends(user.id), form)
+              }, assets)
               pending.add(work)
               void work.then(() => pending.delete(work), () => pending.delete(work))
               return work

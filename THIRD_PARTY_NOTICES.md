@@ -25,6 +25,12 @@ The Cordis framework and its foundation libraries are source-vendored into this 
 | `@deepseek-ai/cordis-plugin-hmr` | `@cordisjs/plugin-hmr` | [github.com/deepseek-harness/cordis](https://github.com/deepseek-harness/cordis) | MIT |
 | `@deepseek-ai/cordis-plugin-logger-console` | `@cordisjs/plugin-logger-console` | [github.com/deepseek-harness/cordis](https://github.com/deepseek-harness/cordis) | MIT |
 
+The webwjkj browser UI includes source from code-server and Microsoft VS Code, and the Microsoft Codicons font. Revisions and local changes are recorded in [vendor/webwjkj/README.md](vendor/webwjkj/README.md).
+
+- code-server: [MIT](vendor/webwjkj/code-server/LICENSE)
+- Microsoft VS Code: [MIT](vendor/webwjkj/vscode/LICENSE.txt)
+- Microsoft Codicons: [CC-BY-4.0](vendor/webwjkj/CODICONS-LICENSE)
+
 ## Runtime npm dependencies
 
 External packages installed for runtime use or distributed inside the prebuilt browser artifacts. Browser inputs are resolved through the shipping tsdown and Vite configurations, independently of npm dependency sections. The tier covers every plugin a user can mount from `cordis.yml` — not only what the `dsh` CLI, Web UI, and Python SDK runtime load by default.
@@ -71,7 +77,6 @@ External packages installed for runtime use or distributed inside the prebuilt b
 | [`content-disposition`](https://github.com/jshttp/content-disposition) | MIT |
 | [`diff`](https://github.com/kpdecker/jsdiff) | BSD-3-Clause |
 | [`dockerode`](http://github.com/apocas/dockerode) | Apache-2.0 |
-| [`dockview`](https://github.com/dockview/dockview) | MIT |
 | [`e2b`](https://github.com/e2b-dev/e2b) | MIT |
 | [`electron-updater`](https://github.com/electron-userland/electron-builder) | MIT |
 | [`eventsource-parser`](https://github.com/rexxars/eventsource-parser) | MIT |

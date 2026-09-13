@@ -1,11 +1,13 @@
 /** Script-free account HTTP forms over the private authentication runtime. */
+import { friendInput } from './friends.ts'
 import { readFile } from 'node:fs/promises'
 import { renderWorkspace } from './workspace-page.ts'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { fromNodeHeaders } from 'better-auth/node'
 import { z } from 'zod'
 import { avatarSchema, usernameSchema, type AccountRuntime } from './auth-runtime.ts'
-import { renderAccount, type AccountNotice } from './account-page.ts'
+import { renderAccount, type AccountNotice, type LoginMethod } from './account-page.ts'
+import type { AccountUser } from './account-types.ts'
 import type { Locale } from './locales.ts'
 
 const phoneSchema = z.string().transform(value => value.replace(/[\s-]/g, '')).transform(value => value.startsWith('+') ? value : `+86${value}`).pipe(z.string().regex(/^\+861[3-9]\d{9}$/))
@@ -19,8 +21,14 @@ const emailSchema = z.email().max(254).transform(value => value.toLowerCase())
  * @param runtime - account service and deployment policy.
  * @param req - browser request; peer address comes from the socket, not proxy headers.
  * @param res - response receiving private HTML and HttpOnly login cookies.
+ * @param readIm - optional authenticated IM directory and history projection.
+ * @param assets - reader confined to the installed upstream browser artifacts.
  */
-export async function handleAccount(runtime: AccountRuntime, req: IncomingMessage, res: ServerResponse): Promise<void> {
+export async function handleAccount(
+  runtime: AccountRuntime, req: IncomingMessage, res: ServerResponse,
+  readIm?: (user: AccountUser, url: URL, form?: URLSearchParams) => Promise<unknown>,
+  assets?: (path: string) => Promise<{ content: Buffer; type: string } | undefined>,
+): Promise<void> {
   const config = runtime.config
   const url = new URL(req.url ?? '/', config.publicOrigin)
   const headers = fromNodeHeaders(req.headers)
@@ -31,11 +39,16 @@ export async function handleAccount(runtime: AccountRuntime, req: IncomingMessag
   function redirect(path: string) { res.writeHead(303, { Location: path, 'Cache-Control': 'no-store' }); res.end() }
   async function page(notice?: AccountNotice, status = 200) {
     const user = await runtime.user(headers)
-    const html = renderAccount(locale, user, config, notice, phone, email)
+    const requested = url.searchParams.get('method')
+    const method: LoginMethod = url.pathname.includes('/login/email/') ? 'email'
+      : url.pathname.endsWith('/login/password') ? 'password'
+        : url.pathname.includes('wechat') ? 'wechat'
+          : requested === 'email' || requested === 'password' || requested === 'wechat' ? requested : 'sms'
+    const html = renderAccount(locale, user, config, notice, phone, email, method)
     res.writeHead(status, {
       'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store',
       'Content-Security-Policy': "default-src 'none'; style-src 'unsafe-inline'; img-src https:; form-action 'self'; base-uri 'none'; frame-ancestors 'none'",
-      'Referrer-Policy': 'no-referrer', 'X-Content-Type-Options': 'nosniff',
+      'Referrer-Policy': 'same-origin', 'X-Content-Type-Options': 'nosniff',
     })
     res.end(req.method === 'HEAD' ? undefined : html)
   }
@@ -70,17 +83,37 @@ export async function handleAccount(runtime: AccountRuntime, req: IncomingMessag
       if (url.pathname === '/workspace' || url.pathname === '/workspace/') {
         content = renderWorkspace(locale, user)
         type = 'text/html; charset=utf-8'
+      } else if (url.pathname === '/workspace/assets/client.css') {
+        content = await readFile(new URL('./lib/client.css', import.meta.resolve('@deepseek-ai/dsh-webwjkj/package.json')))
+        type = 'text/css; charset=utf-8'
       } else if (url.pathname === '/workspace/assets/client.js') {
         content = await readFile(new URL(import.meta.resolve('@deepseek-ai/dsh-webwjkj/client')))
         type = 'text/javascript; charset=utf-8'
-      } else if (url.pathname === '/workspace/assets/dockview.css') {
-        content = await readFile(new URL(import.meta.resolve('dockview/dist/styles/dockview.css')))
-        type = 'text/css; charset=utf-8'
+      } else if (url.pathname.startsWith('/workspace/ui/')) {
+        const asset = await assets?.(url.pathname)
+        if (!asset) { res.writeHead(404); res.end(); return }
+        content = asset.content; type = asset.type
       } else { res.writeHead(404); res.end(); return }
       res.writeHead(200, { 'Content-Type': type, 'Cache-Control': 'no-store',
-        'Content-Security-Policy': "default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src https: data:; connect-src 'self'; base-uri 'none'; frame-ancestors 'none'",
-        'Referrer-Policy': 'no-referrer', 'X-Content-Type-Options': 'nosniff' })
+        'Content-Security-Policy': "default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' https: data:; font-src 'self' data:; connect-src 'self'; worker-src 'none'; frame-src 'none'; base-uri 'self'; frame-ancestors 'self'",
+        'Referrer-Policy': 'same-origin', 'X-Content-Type-Options': 'nosniff' })
       res.end(req.method === 'HEAD' ? undefined : content)
+      return
+    }
+    if (req.method === 'GET' && url.pathname === '/account/me') {
+      const user = await runtime.user(headers)
+      if (!user) { res.writeHead(401); res.end(); return }
+      res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }); res.end(JSON.stringify(user)); return
+    }
+    if (req.method === 'GET' && (url.pathname === '/account/im' || url.pathname === '/account/im/history')) {
+      const user = await runtime.user(headers)
+      if (!user) { res.writeHead(401); res.end(); return }
+      if (!readIm) { res.writeHead(503); res.end(); return }
+      try {
+        const data = await readIm(user, url)
+        res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' })
+        res.end(JSON.stringify(data))
+      } catch { res.writeHead(403); res.end() }
       return
     }
     if (req.method === 'GET' || req.method === 'HEAD') {
@@ -106,6 +139,23 @@ export async function handleAccount(runtime: AccountRuntime, req: IncomingMessag
     const isSms = url.pathname === '/account/sms/send' || url.pathname === '/account/sms/verify'
     const isLogin = ['/account/login/password', '/account/login/email/send', '/account/login/email/verify', '/account/login/wechat'].includes(url.pathname)
     if (!isSms && !isLogin && !user) { redirect(`/login?lang=${locale}`); return }
+    if ((url.pathname === '/account/im/group' || url.pathname === '/account/im/message') && user) {
+      if (!readIm) { res.writeHead(503); res.end(); return }
+      try {
+        const data = await readIm(user, url, form)
+        res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }); res.end(JSON.stringify(data))
+      } catch { res.writeHead(400); res.end() }
+      return
+    }
+    if (url.pathname === '/account/friends') {
+      if (!user) { res.writeHead(401); res.end(); return }
+      try {
+        const data = await runtime.friends(user.id, friendInput.parse(Object.fromEntries(form)))
+        res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' })
+        res.end(JSON.stringify(data))
+      } catch { res.writeHead(400); res.end() }
+      return
+    }
     let result: Response
     let notice: AccountNotice = 'saved'
     switch (url.pathname) {
@@ -122,7 +172,7 @@ export async function handleAccount(runtime: AccountRuntime, req: IncomingMessag
         break
       }
       case '/account/login/password':
-        result = await call('/sign-in/username', { username: loginNameSchema.parse(form.get('username')), password: passwordSchema.parse(form.get('password')) })
+        result = await call('/sign-in/username', { username: loginNameSchema.parse(form.get('username')), password: z.string().min(config.localTestAccount ? 6 : 12).max(128).parse(form.get('password')) })
         if (result.ok) { redirect(`/workspace?lang=${locale}`); return }
         break
       case '/account/login/email/send':
@@ -141,7 +191,7 @@ export async function handleAccount(runtime: AccountRuntime, req: IncomingMessag
       case '/account/password': {
         const newPassword = passwordSchema.parse(form.get('newPassword'))
         result = user?.hasPassword
-          ? await call('/change-password', { newPassword, currentPassword: passwordSchema.parse(form.get('currentPassword')), revokeOtherSessions: true })
+          ? await call('/change-password', { newPassword, currentPassword: z.string().min(config.localTestAccount ? 6 : 12).max(128).parse(form.get('currentPassword')), revokeOtherSessions: true })
           : await runtime.setPassword(headers, newPassword)
         const cookies = result.headers.getSetCookie()
         if (cookies.length) res.setHeader('Set-Cookie', cookies)
@@ -164,7 +214,7 @@ export async function handleAccount(runtime: AccountRuntime, req: IncomingMessag
         if (!config.wechat) { await page('unavailable', 503); return }
         const signingIn = url.pathname === '/account/login/wechat'
         if (!signingIn && user?.wechat) { await page('invalid', 409); return }
-        result = await call(signingIn ? '/sign-in/social' : '/link-social', { provider: 'wechat', callbackURL: `/${signingIn ? 'workspace' : 'account'}?lang=${locale}`, errorCallbackURL: `/${signingIn ? 'login' : 'account'}?lang=${locale}` })
+        result = await call(signingIn ? '/sign-in/social' : '/link-social', { provider: 'wechat', callbackURL: `/${signingIn ? 'workspace' : 'account'}?lang=${locale}`, errorCallbackURL: `/${signingIn ? 'login' : 'account'}?lang=${locale}${signingIn ? '&method=wechat' : ''}` })
         if (result.ok) {
           const data = z.object({ url: z.url() }).parse(await result.json())
           if (new URL(data.url).origin !== 'https://open.weixin.qq.com') throw new Error('Unexpected authorization URL')
@@ -175,7 +225,7 @@ export async function handleAccount(runtime: AccountRuntime, req: IncomingMessag
       }
       case '/account/logout':
         result = await call('/sign-out', {})
-        if (result.ok) { redirect(locale === 'zh' ? '/' : '/en'); return }
+        if (result.ok) { redirect(`/login?lang=${locale}`); return }
         break
       default: res.writeHead(404); res.end(); return
     }

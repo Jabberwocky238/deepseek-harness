@@ -1,20 +1,19 @@
-/** Authenticated workbench shell; panel behavior belongs to the browser entry. */
+/** Authenticated entry for the real VS Code browser workbench shipped by code-server. */
 import type { Locale } from './locales.ts'
 import type { AccountUser } from './account-types.ts'
 import { escapeHtml } from './account-page.ts'
 
-const zh = { title: '工作台', account: '账号设置', reset: '重置布局', welcome: '欢迎', notes: '便笺', guide: '使用说明', add: '打开面板', saved: '布局自动保存在当前浏览器', loading: '正在加载工作台…' }
-const copy: Record<Locale, typeof zh> = { zh, en: { title: 'Workbench', account: 'Account settings', reset: 'Reset layout', welcome: 'Welcome', notes: 'Notes', guide: 'Layout guide', add: 'Open panel', saved: 'Layout is saved in this browser', loading: 'Loading workbench…' } }
+const copy: Record<Locale, { title: string; loading: string }> = {
+  zh: { title: '工作台', loading: '正在加载工作台…' }, en: { title: 'Workbench', loading: 'Loading workbench…' },
+}
 
 /**
- * Render the protected workspace with external local JavaScript and styles.
+ * Render the code-server workbench bootstrap with session-scoped profile data.
  * @param locale - display language.
- * @param user - authenticated account; UUID scopes local layout preferences.
- * @returns complete HTML document.
+ * @param user - authenticated identity; no tokens are embedded in HTML.
+ * @returns complete HTML document loading the installed upstream workbench.
  */
 export function renderWorkspace(locale: Locale, user: AccountUser): string {
   const t = copy[locale]
-  return `<!doctype html><html lang="${locale === 'zh' ? 'zh-CN' : 'en'}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${t.title} · webwjkj</title><link rel="stylesheet" href="/workspace/assets/dockview.css"><style>
-*{box-sizing:border-box}html,body{margin:0;height:100%;overflow:hidden}body{font:13px system-ui,sans-serif;background:#181818;color:#ddd;display:flex;flex-direction:column}button,a,select{font:inherit}button,select{background:#252526;border:1px solid #484848;color:#ddd;border-radius:4px;padding:5px 10px}button,a{cursor:pointer}a{color:#b5d8ff;text-decoration:none}button:hover{background:#3a3a3a}button:focus-visible,a:focus-visible,select:focus-visible{outline:2px solid #65aeef;outline-offset:2px}header{height:44px;flex-shrink:0;display:flex;align-items:center;gap:15px;padding:0 16px;border-bottom:1px solid #333}header strong{color:#f2f2f2}header .grow{flex:1}.identity{display:flex;gap:8px;align-items:center}.identity img{width:24px;height:24px;object-fit:cover;border-radius:50%}.shell{display:flex;flex:1;min-height:0}.rail{width:48px;flex-shrink:0;display:flex;flex-direction:column;align-items:center;gap:18px;padding-top:16px;border-right:1px solid #333}.rail a{font-size:22px;color:#b3b3b3}#workbench{flex:1;min-width:0}footer{height:26px;flex-shrink:0;background:#193b53;display:flex;align-items:center;justify-content:space-between;padding:0 12px;font-size:11px}.wjkj-panel{height:100%;overflow:auto;padding:24px;color:#ccc;background:#1f1f1f}.wjkj-panel h1{font-size:26px;font-weight:500;color:#f4f4f4}.wjkj-panel h2{font-size:17px;font-weight:500}.wjkj-panel p{line-height:1.8;max-width:650px}.wjkj-panel nav{display:flex;flex-direction:column;gap:12px}.wjkj-panel button{text-align:left}.wjkj-panel textarea{width:100%;height:calc(100% - 45px);min-height:100px;resize:none;background:#1f1f1f;color:#ddd;border:1px solid #454545;border-radius:4px;padding:12px;font:14px/1.7 ui-monospace,monospace}.wjkj-panel code{overflow-wrap:anywhere;display:block;font-size:11px;line-height:1.8}.wjkj-panel dl{line-height:1.8}.wjkj-panel dd{margin:0 0 16px}.wjkj-panel dt{color:#999}.wjkj-panel .eyebrow{color:#80b4db;text-transform:uppercase;letter-spacing:2px;font-size:11px}#loading{padding:24px}.dv-tabs-and-actions-container{font-size:12px}@media(max-width:600px){header{gap:8px;padding:0 8px}header .label,footer span:last-child{display:none}.rail{width:36px}.wjkj-panel{padding:14px}}
-</style><script type="module" src="/workspace/assets/client.js"></script></head><body data-user-id="${user.id}" data-user-name="${escapeHtml(user.name)}"><header><strong>webwjkj</strong><span class="label">${t.title}</span><span class="grow"></span><label><span class="label">${t.add} </span><select id="panel-kind"><option value="welcome">${t.welcome}</option><option value="notes">${t.notes}</option><option value="guide">${t.guide}</option></select></label><button id="open-panel" aria-label="${t.add}">＋</button><button id="reset-layout">${t.reset}</button><a class="identity" href="/account?lang=${locale}">${user.image ? `<img src="${escapeHtml(user.image)}" alt="" referrerpolicy="no-referrer">` : ''}<span>${t.account}</span></a></header><div class="shell"><nav class="rail" aria-label="webwjkj"><a href="/workspace?lang=${locale}" aria-label="${t.title}">▦</a><a href="/account?lang=${locale}" aria-label="${t.account}">⚙</a></nav><main id="workbench"><p id="loading" role="status">${t.loading}</p></main></div><footer><span>webwjkj</span><span>${t.saved}</span></footer></body></html>\n`
+  return `<!doctype html><html lang="${locale === 'zh' ? 'zh-CN' : 'en'}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${t.title} · webwjkj</title><link rel="stylesheet" href="/workspace/ui/ui.css"><link rel="stylesheet" href="/workspace/assets/client.css"><style>html,body{margin:0;width:100%;height:100%;background:#181818;color:#ccc;overflow:hidden}#loading{padding:24px;font:14px system-ui}</style><script type="module" src="/workspace/assets/client.js"></script></head><body data-user-id="${user.id}" data-user-name="${escapeHtml(user.name)}"><p id="loading">${t.loading}</p></body></html>\n`
 }

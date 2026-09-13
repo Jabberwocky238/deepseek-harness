@@ -14,6 +14,7 @@ import {
   parsePyprojectRequirements,
   parseVendoredRows,
   render,
+  renderWebwjkjNotices,
   tierExternalDeps,
   virtualManifest,
 } from './gen-third-party-notices.ts'
@@ -203,10 +204,32 @@ describe('parseVendoredRows', () => {
   it('covers every vendored directory, so no package can drop out of the notices', () => {
     const parsed = new Set(parseVendoredRows(readFileSync(resolve(root, 'vendor/README.md'), 'utf8')).map(row => row.npmName))
     const onDisk = readdirSync(resolve(root, 'vendor'), { withFileTypes: true })
-      .filter(entry => entry.isDirectory())
+      .filter(entry => entry.isDirectory() && entry.name !== 'webwjkj')
       .map(entry => (JSON.parse(readFileSync(resolve(root, 'vendor', entry.name, 'package.json'), 'utf8')) as Manifest).name)
 
     expect([...onDisk].sort()).toEqual([...parsed].sort())
+  })
+})
+
+describe('source-only webwjkj notices', () => {
+  it('discloses the retained source and font licenses', () => {
+    const notice = renderWebwjkjNotices(root)
+    expect(notice).toContain('[MIT](vendor/webwjkj/vscode/LICENSE.txt)')
+    expect(notice).toContain('[MIT](vendor/webwjkj/code-server/LICENSE)')
+    expect(notice).toContain('[CC-BY-4.0](vendor/webwjkj/CODICONS-LICENSE)')
+  })
+
+  it('rejects a source distribution without retained licenses', () => {
+    const directory = mkdtempSync(join(tmpdir(), 'dsh-ui-notices-'))
+    try {
+      expect(() => renderWebwjkjNotices(directory)).toThrow('ENOENT')
+      const licenseDirectory = join(directory, 'vendor/webwjkj/code-server')
+      mkdirSync(licenseDirectory, { recursive: true })
+      writeFileSync(join(licenseDirectory, 'LICENSE'), '')
+      expect(() => renderWebwjkjNotices(directory)).toThrow('empty license file')
+    } finally {
+      rmSync(directory, { recursive: true, force: true })
+    }
   })
 })
 

@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-09-13-webwjkj-homepage.md
-2026-09-13-webwjkj-homepage.md: 2eb89014f8ceea8df9d64e2fd0de097847b1df58
-2026-09-13-webwjkj-homepage.zh.md: 38b299b33e1d2564e5d0fc06ed3cf9ea1230fc97
+2026-09-13-webwjkj-homepage.md: 6d2b5e4a1d227371f3b7e3d98cf06c9301480289
+2026-09-13-webwjkj-homepage.zh.md: 52e1c621f75168058aba98761c7fa1842b9af4bf

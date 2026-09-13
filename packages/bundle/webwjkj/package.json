@@ -21,7 +21,9 @@
     "lib/index.js",
     "lib/client.js",
     "cordis.patch.yml",
-    "lib/types/**/*.d.ts"
+    "lib/types/**/*.d.ts",
+    "lib/client.css",
+    "lib/workbench"
   ],
   "license": "MIT",
   "dsh": {
@@ -33,13 +35,16 @@
     "@deepseek-ai/dsh-atomic-write": "workspace:^",
     "@deepseek-ai/dsh-brand": "workspace:^",
     "@deepseek-ai/dsh-host-webserver": "workspace:^",
+    "@deepseek-ai/dsh-im": "workspace:^",
+    "@deepseek-ai/dsh-storage": "workspace:^",
+    "@deepseek-ai/dsh-storage-domain": "workspace:^",
+    "@deepseek-ai/dsh-storage-json": "workspace:^",
+    "@deepseek-ai/dsh-util-crypto": "workspace:^",
     "@deepseek-ai/schemastery": "workspace:^",
     "better-auth": "1.7.4",
-    "dockview": "^8.3.1",
     "nodemailer": "^10.0.8",
     "tencentcloud-sdk-nodejs-sms": "^4.1.306",
-    "zod": "^4.4.3",
-    "@deepseek-ai/dsh-util-crypto": "workspace:^"
+    "zod": "^4.4.3"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "workspace:^"

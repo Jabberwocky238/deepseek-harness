@@ -10,12 +10,13 @@ import { getMigrations } from 'better-auth/db/migration'
 import { withFileLock } from '@deepseek-ai/dsh-atomic-write'
 import { brandString } from '@deepseek-ai/dsh-brand'
 import { z } from 'zod'
+import { acceptedFriends, friendInput, friendOperation, type FriendProfile } from './friends.ts'
 import { createDelivery, wechatProvider } from './providers.ts'
 import type { AuthConfig } from './auth-config.ts'
 import type { AccountUser, UserId } from './account-types.ts'
 
 /** Physical schema version; successors must increase it and preserve existing users. */
-export const AUTH_SCHEMA_VERSION = 2
+export const AUTH_SCHEMA_VERSION = 3
 
 /** Username accepted from the account form. */
 export const usernameSchema = z.string().trim().min(1).max(40)
@@ -35,6 +36,19 @@ export interface AccountRuntime {
   setPassword(headers: Headers, newPassword: string): Promise<Response>
   /** Read a safe user view for a browser cookie. */
   user(headers: Headers): Promise<AccountUser | null>
+  /**
+   * Search public profiles or manage the authenticated account's friend applications.
+   * @param owner - authenticated UUID.
+   * @param input - parsed operation fields.
+   * @returns public result without contact details or credentials.
+   */
+  friends(owner: UserId, input: z.infer<typeof friendInput>): Promise<unknown>
+  /**
+   * Read accepted contacts for IM projection.
+   * @param owner - authenticated UUID.
+   * @returns public peer profiles.
+   */
+  acceptedFriends(owner: UserId): Promise<FriendProfile[]>
   /** Unregister callers before closing; drains all acquired operations. */
   close(): Promise<void>
 }
@@ -49,7 +63,10 @@ export async function createAccountRuntime(config: AuthConfig): Promise<AccountR
   if (origin.origin !== config.publicOrigin || (origin.protocol !== 'https:' && !(origin.protocol === 'http:' && ['localhost', '127.0.0.1', '[::1]'].includes(origin.hostname)))) {
     throw new Error('webwjkj: publicOrigin must be an HTTPS origin or a loopback HTTP origin')
   }
-  const root = resolve(config.root)
+  if (config.localTestAccount && (process.env.NODE_ENV === 'production' || !['localhost', '127.0.0.1', '[::1]'].includes(origin.hostname))) {
+    throw new Error('webwjkj: local test account is forbidden in production or with a public origin')
+  }
+  const root = config.localTestAccount ? resolve(config.root, 'local-test') : resolve(config.root)
   await mkdir(root, { recursive: true, mode: 0o700 })
   const filename = join(root, 'accounts.sqlite')
   const lock = <T>(operation: () => Promise<T>) => withFileLock(filename, operation, { waitMs: config.lockWaitMs })
@@ -67,7 +84,7 @@ export async function createAccountRuntime(config: AuthConfig): Promise<AccountR
     const db = new DatabaseSync(filename)
     try {
       const version = db.prepare('PRAGMA user_version').get()?.['user_version']
-      if (version !== 0 && version !== 1 && version !== AUTH_SCHEMA_VERSION) throw new Error('webwjkj: unsupported authentication schema version')
+      if (version !== 0 && version !== 1 && version !== 2 && version !== AUTH_SCHEMA_VERSION) throw new Error('webwjkj: unsupported authentication schema version')
       db.exec('PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON; PRAGMA synchronous = FULL;')
       function reserveSend(recipient: string) {
         db.prepare('DELETE FROM wjkj_send_limits WHERE windowStart < ?').run(Date.now() - 86400000)
@@ -127,11 +144,31 @@ export async function createAccountRuntime(config: AuthConfig): Promise<AccountR
         db.exec(`CREATE TABLE IF NOT EXISTS wjkj_send_limits (key TEXT PRIMARY KEY, lastSent INTEGER NOT NULL, windowStart INTEGER NOT NULL, count INTEGER NOT NULL);
           CREATE UNIQUE INDEX IF NOT EXISTS wjkj_one_wechat_per_user ON account(userId) WHERE providerId = 'wechat';
           CREATE UNIQUE INDEX IF NOT EXISTS wjkj_wechat_owner ON account(providerId, accountId) WHERE providerId = 'wechat';
-          PRAGMA user_version = ${AUTH_SCHEMA_VERSION};`)
+          PRAGMA user_version = 2;`)
       } else if (migration.toBeCreated.length || migration.toBeAdded.length) {
         throw new Error('webwjkj: authentication schema does not match this build')
       }
-      await auth.$context
+      if (version !== AUTH_SCHEMA_VERSION) {
+        db.exec(`BEGIN IMMEDIATE;
+          CREATE TABLE IF NOT EXISTS wjkj_friend_requests (id TEXT PRIMARY KEY, sender TEXT NOT NULL REFERENCES user(id), recipient TEXT NOT NULL REFERENCES user(id), greeting TEXT NOT NULL, status TEXT NOT NULL CHECK(status IN ('pending','accepted','rejected')), updatedAt INTEGER NOT NULL, CHECK(sender<>recipient));
+          CREATE UNIQUE INDEX IF NOT EXISTS wjkj_friend_pair ON wjkj_friend_requests(min(sender,recipient),max(sender,recipient));
+          PRAGMA user_version = ${AUTH_SCHEMA_VERSION};
+          COMMIT;`)
+      }
+      const authContext = await auth.$context
+      if (config.localTestAccount && !db.prepare('SELECT id FROM user WHERE username = ?').get('admin')) {
+        const userId = randomUUID()
+        const now = Date.now()
+        const password = await authContext.password.hash('123123')
+        db.exec('BEGIN IMMEDIATE')
+        try {
+          db.prepare('INSERT INTO user (id,name,email,emailVerified,createdAt,updatedAt,username) VALUES (?,?,?,?,?,?,?)')
+            .run(userId, 'admin', 'admin@local.webwjkj.invalid', 0, now, now, 'admin')
+          db.prepare('INSERT INTO account (id,accountId,providerId,userId,password,createdAt,updatedAt) VALUES (?,?,?,?,?,?,?)')
+            .run(randomUUID(), userId, 'credential', userId, password, now, now)
+          db.exec('COMMIT')
+        } catch (error) { db.exec('ROLLBACK'); throw error }
+      }
       let closed = false
       const pending = new Set<Promise<unknown>>()
       function run<T>(operation: () => Promise<T>): Promise<T> {
@@ -143,6 +180,19 @@ export async function createAccountRuntime(config: AuthConfig): Promise<AccountR
       }
       return {
         config,
+        acceptedFriends: owner => run(() => Promise.resolve(acceptedFriends(db, owner))),
+        friends: (owner, input) => run(() => {
+          const parsed = friendInput.parse(input)
+          if (parsed.action !== 'list') {
+            const key = createHmac('sha256', secret).update(`friends:${owner}`).digest('hex')
+            const now = Date.now()
+            const row = db.prepare('SELECT windowStart,count FROM wjkj_send_limits WHERE key=?').get(key)
+            const fresh = !row || now - Number(row['windowStart']) >= 60000
+            if (!fresh && Number(row['count']) >= config.requestsPerMinute) throw new Error('Friend request rate exceeded')
+            db.prepare('INSERT INTO wjkj_send_limits VALUES (?,?,?,?) ON CONFLICT(key) DO UPDATE SET lastSent=excluded.lastSent,windowStart=excluded.windowStart,count=excluded.count').run(key, now, fresh ? now : Number(row['windowStart']), fresh ? 1 : Number(row['count']) + 1)
+          }
+          return Promise.resolve(friendOperation(db, owner, parsed))
+        }),
         handle: request => run(() => auth.handler(request)),
         setPassword: (headers, newPassword) => run(() => auth.api.setPassword({ headers, body: { newPassword }, asResponse: true })),
         user: headers => run(async () => {

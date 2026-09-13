@@ -440,6 +440,27 @@ export function parseVendoredRows(text: string): VendoredRow[] {
 }
 
 /**
+ * Disclose the source-only UI distribution and require its retained license files.
+ * @param repositoryRoot - repository containing the webwjkj source distribution.
+ * @returns Markdown attribution for the UI source and font.
+ */
+export function renderWebwjkjNotices(repositoryRoot: string): string {
+  const licenses = [
+    ['code-server', 'MIT', 'code-server/LICENSE'],
+    ['Microsoft VS Code', 'MIT', 'vscode/LICENSE.txt'],
+    ['Microsoft Codicons', 'CC-BY-4.0', 'CODICONS-LICENSE'],
+  ] as const
+  const rows = licenses.map(([name, license, path]) => {
+    const file = `vendor/webwjkj/${path}`
+    if (readFileSync(resolve(repositoryRoot, file), 'utf8').trim().length === 0) {
+      throw new Error(`gen-third-party-notices: empty license file ${file}`)
+    }
+    return `- ${name}: [${license}](${file})`
+  })
+  return `The webwjkj browser UI includes source from code-server and Microsoft VS Code, and the Microsoft Codicons font. Revisions and local changes are recorded in [vendor/webwjkj/README.md](vendor/webwjkj/README.md).\n\n${rows.join('\n')}`
+}
+
+/**
  * Parse the vendored manifest table and confirm it accounts for every vendored
  * directory. The `vendor/` tree — not the table — is the set that must be
  * disclosed, so a row that stops matching the table format is a hard error
@@ -450,6 +471,8 @@ function collectVendored(): VendoredRow[] {
   const onDisk = new Map<string, string>()
   for (const entry of readdirSync(resolve(root, 'vendor'), { withFileTypes: true })) {
     if (!entry.isDirectory()) continue
+    // Source-only UI licenses are required and disclosed by renderWebwjkjNotices().
+    if (entry.name === 'webwjkj') continue
     const manifest = readManifest(`vendor/${entry.name}/package.json`)
     if (manifest.name !== undefined) onDisk.set(manifest.name, entry.name)
   }
@@ -730,6 +753,8 @@ The Cordis framework and its foundation libraries are source-vendored into this 
 | Package | Upstream name | Upstream | License |
 | --- | --- | --- | --- |
 ${vendored.map(row => `| \`${row.npmName}\` | \`${row.upstreamName}\` | [${row.upstream.replace('https://', '')}](${row.upstream}) | MIT |`).join('\n')}
+
+${renderWebwjkjNotices(root)}
 
 ## Runtime npm dependencies
 

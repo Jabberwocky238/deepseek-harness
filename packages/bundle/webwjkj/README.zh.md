@@ -25,6 +25,8 @@ webwjkj 是独立网页应用：公开首页、短信、账号密码、邮箱与
 <a id="use-this-package"></a>
 ## 使用本包
 
+启动配置前运行 `pnpm run build:webwjkj-workbench`。该命令将直接维护的 [UI 源码](../../../vendor/webwjkj/README.md) 编译至本包的 `lib/workbench` 目录。构建只接纳浏览器 UI 组件，拒绝完整工作台、编辑器引擎、扩展宿主、服务端与外部运行时依赖。`workbenchRoot: bundled` 选择此产物；显式路径可选择经过相同资源校验的其他构建。
+
 构建仓库后，在 `$DSH_HOME/profiles/webwjkj/package.json` 中准备以下独立 profile 清单（默认 home 为 `~/.dsh`），然后从仓库根目录安装本地模块。
 
 ```json
@@ -45,9 +47,28 @@ pnpm dsh --profile webwjkj
 
 在 profile 的 `cordis.patch.yml` 中覆盖 `webwjkj-server` 行可更改监听地址和端口；配置替换整行 config，需同时提供 host 和 port。端口冲突会导致启动失败。
 
-登录入口 `/login` 并列提供短信验证码、登录账号与密码、邮箱验证码和微信扫码四种方式，验证后进入 `/workspace`。短信、邮箱和微信首次验证创建 UUID 用户；在 `/account` 设置 3–30 位登录账号与 12–128 位密码后可使用账号登录，修改已有密码需要当前密码。手机号、邮箱和微信可在账号设置中验证绑定，同一已绑定身份的登录使用原 UUID。未绑定的不同身份不会自动合并。
+登录入口 `/login` 顶部通过文字 Tab 切换短信验证码与账号密码，下方通过邮箱和微信图标切换相应登录方式，每次只显示一个表单，验证后进入 `/workspace`。短信、邮箱和微信首次验证创建 UUID 用户；在 `/account` 设置 3–30 位登录账号与 12–128 位密码后可使用账号登录，修改已有密码需要当前密码。手机号、邮箱和微信可在账号设置中验证绑定，同一已绑定身份的登录使用原 UUID。未绑定的不同身份不会自动合并。
 
-Dockview 提供左右侧栏和中间上下两个同等工作区；标签可以拖动、关闭、拆分和重新打开，分隔线可调整尺寸。布局和便笺按用户 UUID 保存在当前浏览器，窄屏默认只显示中间两组。`/account` 管理用户名、HTTPS 头像链接、邮箱验证和微信扫码绑定。
+活动栏左下角为设置，个人资料入口紧邻其上方。个人资料通过原生弹窗展示并支持编辑，退出登录返回登录页。点击联系人或群聊打开带文字历史和消息编辑器的会话标签。每个账号默认拥有 `default agent` 好友。IM 消息与群聊通过共享存储服务持久化至 `$DSH_HOME/webwjkj/im`。
+
+应用复用克隆的 VS Code 网格、分隔条、动作栏、图标与对话框 UI 源码，标签、联系人列表、消息面板和设置由 webwjkj 提供。联系人按钮打开合并的联系人与群聊列表，最近通信的对象排在前面。下方与右侧工作区初始关闭，打开时为空白，标签可拖动到不同区域。应用不包含状态栏、VS Code Chat、终端、命令面板、文件浏览器、扩展安装、远程执行或扩展宿主。
+
+左侧栏提供添加好友、发起群聊、通知与刷新按钮。按 UUID、已验证手机号或已验证邮箱精确搜索，在上方工作区打开公开资料，不返回联系方式。好友申请可以附带打招呼消息，只有收件人能够接受或拒绝。申请持久化在版本 3 的账号 SQLite 数据库中，接受后的关系幂等投影为 IM 双向联系人。创建群聊只能选择当前账号的联系人。设置提供亮色、暗色与跟随系统选项，默认跟随系统，手动选择按用户 UUID 保存在浏览器中。
+
+本地测试可在个人 profile 的 `cordis.patch.yml` 显式设置以下配置，使用 `admin / 123123` 登录。它不包含在默认 bundle 配置中；仅接受本机监听和本机地址，`NODE_ENV=production` 会拒绝启用。测试数据库位于 `$DSH_HOME/webwjkj/local-test`，普通模式使用原目录，不读取测试账号。首次创建后重启不会重置密码；关闭开关即可返回普通数据库。
+
+```yaml
+- id: webwjkj-home
+  config:
+    workbenchRoot: bundled
+    auth:
+      root: !!js dshHomePath('webwjkj')
+      publicOrigin: http://127.0.0.1:3081
+      localTestAccount: true
+- id: webwjkj-storage-json
+  config:
+    root: !!js dshHomePath('webwjkj', 'local-test', 'im')
+```
 
 在启动进程的环境中配置以下变量；密钥仅存放在本地环境或密钥管理服务中。未配置的服务显示未开通，填写不完整的配置会导致加载失败。生产环境使用 HTTPS，并将 `WEBWJKJ_PUBLIC_ORIGIN` 设置为对外地址。
 
@@ -81,9 +102,9 @@ WEBWJKJ_WECHAT_APP_SECRET=your-app-secret
 <details>
 <summary>实现细节 — 点击展开</summary>
 
-[补丁](cordis.patch.yml) 挂载 HTTP 服务和页面插件。账号使用 Better Auth 与 Node SQLite，腾讯云官方 SDK 发送短信，SMTP 验证邮箱，微信接口交换授权码并获取用户资料。账号操作通过跨进程文件锁串行执行，防止同一个验证码并发消费；数据库版本只允许单调升级。
+[补丁](cordis.patch.yml) 挂载 HTTP 服务、页面插件、JSON 存储与 IM 服务。账号使用 Better Auth 与 Node SQLite，腾讯云官方 SDK 发送短信，SMTP 验证邮箱，微信接口交换授权码并获取用户资料。账号操作通过跨进程文件锁串行执行，防止同一个验证码并发消费；数据库版本只允许单调升级。
 
-首页和账号表单由服务端生成；工作台加载独立 Dockview 浏览器产物，Host 与 Client 使用独立编译配置。账号和工作台路由检查会话，写操作检查来源，认证端点只开放所需表单和微信回调。卸载先移除路由，再排空请求并关闭数据库。此包不发布 invariant companion：SQLite 唯一约束和认证操作直接维护账号关系，没有独立副本需要交叉验证。
+首页和账号表单由服务端生成；浏览器通过独立的 Host 与 Client 编译配置加载 webwjkj 与仅含 UI 的源码构建。UI 资源清单严格匹配输出文件名和摘要，旧工作台与扩展路由返回 404。工作台 CSP 禁止脚本内联执行、字符串求值以及 worker 和 frame。账号路由验证会话和写操作来源。卸载先移除路由，再排空请求并关闭数据库。此包不发布 invariant companion：SQLite 唯一约束和认证操作直接维护账号关系，没有独立副本需要交叉验证。
 
 </details>
 
@@ -119,7 +140,7 @@ None；没有模型请求。
 
 <a id="known-limitations-and-deferred-work"></a>
 
-- 工作台提供欢迎、便笺、说明和账号概览面板，不包含 code-server 编辑器、终端或扩展。布局与便笺不跨浏览器同步。短信、邮件和微信需要有效服务配置；本地测试仅替换外部服务，不能证明真实账号投递成功。源码改动需要重新构建并重启。
+- default agent 入口支持打开会话和保存消息；本包不启动模型提供方，也不会生成 agent 回复。打开的标签与面板位置不会跨页面刷新恢复。主题选择保存在浏览器中，不跨设备同步。短信、邮件和微信需要服务配置；本地测试替换外部服务，不能证明真实投递成功。源码变化后，启动前需重新构建 UI。
 
 <a id="dev-note"></a>
 ### 开发备注

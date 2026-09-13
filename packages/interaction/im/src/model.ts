@@ -60,6 +60,7 @@ const messageSchema = z.object({
   attachments: z.array(imAttachmentSchema),
   mode: z.enum(['interrupt', 'queue']),
   sequence: z.number().int().positive(),
+  activityOrder: z.number().int().nonnegative().default(0),
   deliveries: z.record(z.string(), z.enum(['pending', 'queued', 'accepted', 'failed'])),
 })
 

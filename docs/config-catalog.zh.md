@@ -3553,6 +3553,8 @@ export interface Config {
 ```ts config-catalog
 /** Homepage plugin settings. */
 export interface Config {
+  /** UI source build directory, or bundled for the package build output. */
+  workbenchRoot?: string | undefined
   /** When absent, serve only the public homepage. */
   auth?: AuthConfig | undefined
 }
@@ -3561,6 +3563,8 @@ export interface Config {
 export interface AuthConfig {
   /** Private directory containing the authentication database and signing key. */
   root: string
+  /** Explicit loopback-only fixture account; uses a separate local-test database directory. */
+  localTestAccount?: boolean
   /** Canonical browser origin; HTTPS except for loopback development. */
   publicOrigin: string
   /** Verification-code lifetime in seconds. */
@@ -3630,7 +3634,7 @@ export interface WechatConfig {
 }
 ```
 
-来源： [`packages/bundle/webwjkj/src/auth-config.ts:77`](../packages/bundle/webwjkj/src/auth-config.ts)
+来源： [`packages/bundle/webwjkj/src/auth-config.ts:79`](../packages/bundle/webwjkj/src/auth-config.ts)
 
 <a id="deepseek-aidsh-wecom"></a>
 

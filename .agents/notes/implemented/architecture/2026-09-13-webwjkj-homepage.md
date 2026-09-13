@@ -10,7 +10,7 @@ webwjkj needs an independently developed homepage without inheriting the officia
 
 ## Decision
 
-The [webwjkj bundle](../../../../packages/bundle/webwjkj/README.md) owns its homepage, typed locale dictionaries, and responsive styles. Its complete tree contains the existing HTTP carrier and one page plugin. The application starts through a dedicated dsh profile, following the [application launch rule](../../../../docs/architecture.md).
+The [webwjkj bundle](../../../../packages/bundle/webwjkj/README.md) owns its homepage, typed locale dictionaries, and responsive styles. The homepage uses the existing HTTP carrier and one page plugin; the bundle also mounts storage and IM for authenticated workspaces. The application starts through a dedicated dsh profile, following the [application launch rule](../../../../docs/architecture.md).
 
 ## Alternatives considered
 

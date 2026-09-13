@@ -49,10 +49,12 @@ export interface ImMessage {
   attachments: ImAttachment[]
   mode: DeliveryMode
   sequence: number
+  /** Durable cross-conversation commit order; zero means a legacy message without recorded recency. */
+  activityOrder: number
   deliveries: Record<string, 'pending' | 'queued' | 'accepted' | 'failed'>
 }
 /** Caller-owned message input; the distributor assigns order and receipts. */
-export type MessageInput = Omit<ImMessage, 'sequence' | 'deliveries'>
+export type MessageInput = Omit<ImMessage, 'sequence' | 'activityOrder' | 'deliveries'>
 /** Resumable Session and desired online state for one AI identity. */
 export interface AgentBinding {
   participant: ParticipantId

@@ -45,6 +45,8 @@ export interface WechatConfig {
 export interface AuthConfig {
   /** Private directory containing the authentication database and signing key. */
   root: string
+  /** Explicit loopback-only fixture account; uses a separate local-test database directory. */
+  localTestAccount?: boolean
   /** Canonical browser origin; HTTPS except for loopback development. */
   publicOrigin: string
   /** Verification-code lifetime in seconds. */
@@ -75,6 +77,8 @@ export interface AuthConfig {
 
 /** Homepage plugin settings. */
 export interface Config {
+  /** UI source build directory, or bundled for the package build output. */
+  workbenchRoot?: string | undefined
   /** When absent, serve only the public homepage. */
   auth?: AuthConfig | undefined
 }
@@ -82,8 +86,10 @@ export interface Config {
 const required = () => z.string().min(1).required()
 /** Loader validation for account settings and provider completeness. */
 export const Config: z<Config> = z.object({
+  workbenchRoot: z.union([z.const(undefined), required()]),
   auth: z.union([z.const(undefined), z.object({
     root: required(), publicOrigin: required(),
+    localTestAccount: z.boolean().default(false),
     otpSeconds: z.natural().min(30).default(300),
     otpAttempts: z.natural().min(1).max(10).default(3),
     resendSeconds: z.natural().min(1).default(60),

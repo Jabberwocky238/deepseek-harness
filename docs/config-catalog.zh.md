@@ -1770,6 +1770,30 @@ export interface PlanModeConfig {
 
 来源：[`packages/plan/plan-mode/src/index.ts:64`](../packages/plan/plan-mode/src/index.ts)
 
+<a id="deepseek-aidsh-playground"></a>
+
+## `@deepseek-ai/dsh-playground`
+
+```ts config-catalog
+/** Deployment settings for one independently managed Docker namespace. */
+export interface Config {
+  /** Docker Engine Unix socket or Windows named pipe; Docker contexts are not inferred. */
+  socketPath: string
+  /** Persistent ownership label; reuse it after reload to discover the same containers. */
+  namespace: string
+  /** Address returned to SSH clients; must reach the configured published interface. */
+  sshHost: string
+  /** Docker-host IP on which SSH ports are published. */
+  bindAddress: string
+  /** Per-Docker-request timeout in milliseconds. */
+  requestTimeoutMs: number
+  /** Grace period Docker grants a container before killing it during stop. */
+  stopTimeoutSeconds: number
+}
+```
+
+来源： [`packages/playground/playground/src/index.ts:12`](../packages/playground/playground/src/index.ts)
+
 <a id="deepseek-aidsh-plugin-package-inventory-deepseek"></a>
 
 ## `@deepseek-ai/dsh-plugin-package-inventory-deepseek`
@@ -3519,6 +3543,94 @@ export interface Config {
 ```
 
 来源：[`packages/webhook/webhook-github/src/index.ts:17`](../packages/webhook/webhook-github/src/index.ts)
+
+<a id="deepseek-aidsh-webwjkj"></a>
+
+## `@deepseek-ai/dsh-webwjkj`
+
+依赖： `webServer`
+
+```ts config-catalog
+/** Homepage plugin settings. */
+export interface Config {
+  /** When absent, serve only the public homepage. */
+  auth?: AuthConfig | undefined
+}
+
+/** Account runtime settings; omitted providers explicitly disable their action. */
+export interface AuthConfig {
+  /** Private directory containing the authentication database and signing key. */
+  root: string
+  /** Canonical browser origin; HTTPS except for loopback development. */
+  publicOrigin: string
+  /** Verification-code lifetime in seconds. */
+  otpSeconds: number
+  /** Failed verification attempts allowed for one code. */
+  otpAttempts: number
+  /** Minimum seconds between sends to one phone or mailbox. */
+  resendSeconds: number
+  /** Maximum sends per recipient per rolling 24-hour window. */
+  dailySendLimit: number
+  /** Login session lifetime in seconds. */
+  sessionSeconds: number
+  /** Maximum authentication requests per peer per minute. */
+  requestsPerMinute: number
+  /** Provider request timeout in milliseconds. */
+  providerTimeoutMs: number
+  /** Maximum accepted form body size in bytes. */
+  maxBodyBytes: number
+  /** Time allowed to acquire the cross-process authentication lock. */
+  lockWaitMs: number
+  /** Optional Tencent Cloud SMS provider. */
+  sms?: SmsConfig | undefined
+  /** Optional SMTP provider for verified email binding. */
+  mail?: MailConfig | undefined
+  /** Optional WeChat website OAuth provider. */
+  wechat?: WechatConfig | undefined
+}
+
+/** Tencent Cloud SMS template and credential references. */
+export interface SmsConfig {
+  /** Tencent SMS application ID. */
+  sdkAppId: string
+  /** Approved SMS signature. */
+  signName: string
+  /** Approved template containing one verification-code parameter. */
+  templateId: string
+  /** Tencent Cloud API region. */
+  region: string
+  /** Environment reference for the CAM SecretId. */
+  secretIdEnv: string
+  /** Environment reference for the CAM SecretKey. */
+  secretKeyEnv: string
+}
+
+/** SMTP delivery settings for email binding. */
+export interface MailConfig {
+  /** SMTP hostname. */
+  host: string
+  /** SMTP port. */
+  port: number
+  /** Implicit TLS; false requires STARTTLS. */
+  secure: boolean
+  /** SMTP username. */
+  user: string
+  /** Environment reference for the SMTP password. */
+  passwordEnv: string
+  /** Verified sender mailbox. */
+  from: string
+}
+
+/** WeChat Open Platform website application. */
+export interface WechatConfig {
+  /** Website application AppID. */
+  appId: string
+  /** Environment reference for its AppSecret. */
+  secretEnv: string
+}
+```
+
+来源： [`packages/bundle/webwjkj/src/auth-config.ts:77`](../packages/bundle/webwjkj/src/auth-config.ts)
 
 <a id="deepseek-aidsh-wecom"></a>
 

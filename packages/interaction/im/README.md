@@ -31,6 +31,8 @@ Use `im_context({page: {kind: "group", id: "group-id"}})` or a `contact` page wi
 
 `talk` sends to the selected page or an explicitly named joined conversation. All group members receive the message. Ordinary assistant text remains private, so ignoring a notification does not post a group reply.
 
+Channel receivers acknowledge individual messages after accepting them. AI recipients acknowledge messages after their contents enter the durable Session log. Neither acknowledgement is a human read receipt.
+
 <a id="model-experience"></a>
 ## Model Experience
 

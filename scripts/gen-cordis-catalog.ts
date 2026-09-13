@@ -75,6 +75,7 @@ export const SERVICE_PAGE: Record<string, string> = {
   deepseekLlmApiExtensions: 'llm-streaming.md',
   dynamicCordisRunner: 'extensions.md',
   e2b: 'subprocess.md',
+  playground: 'playground.md',
   fileUploads: 'attachment.md',
   fileReferences: 'session-reference.md',
   fs: 'filesystem.md',
@@ -246,6 +247,10 @@ export const EVENT_WALK_EXEMPTIONS: Record<string, string> = {
  * appear on more than one page.
  */
 export const LINK_MAP: Readonly<Record<string, string>> = {
+  CreateContainerRequest: 'playground.md',
+  PlaygroundContainer: 'playground.md',
+  PlaygroundContainerId: 'playground.md',
+  SshEndpoint: 'playground.md',
   Agent: 'core.md',
   AgentCancelCause: 'core.md',
   AgentFactory: 'core.md',

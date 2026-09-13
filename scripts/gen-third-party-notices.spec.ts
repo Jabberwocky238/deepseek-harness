@@ -294,7 +294,7 @@ describe('collectPythonDependencies', () => {
 
 describe('isPermissive', () => {
   it('accepts the licenses this project ships and rejects copyleft or unknown ones', () => {
-    expect(['MIT', 'ISC', 'BSD-3-Clause', 'Apache-2.0', 'MIT / Apache-2.0', '(MIT OR CC0-1.0)'].every(isPermissive)).toBe(true)
+    expect(['MIT', 'MIT-0', 'ISC', 'BSD-3-Clause', 'Apache-2.0', 'MIT / Apache-2.0', '(MIT OR CC0-1.0)'].every(isPermissive)).toBe(true)
     expect([
       'LGPL-3.0-only',
       'MPL-2.0',
@@ -308,6 +308,7 @@ describe('isPermissive', () => {
   it('requires every operand of an AND, so a copyleft conjunct cannot ride along', () => {
     expect(isPermissive('(MIT OR Apache-2.0) AND GPL-3.0-only')).toBe(false)
     expect(isPermissive('MIT AND ISC')).toBe(true)
+    expect(isPermissive('MIT-0 AND GPL-3.0-only')).toBe(false)
     // An exception clause is not a recognized identifier, so it fails closed.
     expect(isPermissive('GPL-2.0-only WITH Classpath-exception-2.0')).toBe(false)
   })

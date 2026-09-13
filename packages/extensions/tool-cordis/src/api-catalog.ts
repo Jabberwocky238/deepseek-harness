@@ -1399,6 +1399,48 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     ],
   },
   {
+    key: 'playground',
+    summary: 'Manages labeled Docker containers that persist independently of plugin lifetime.',
+    description: 'Manages labeled Docker containers that persist independently of plugin lifetime.',
+    methods: [
+      {
+        signature: 'create(request: CreateContainerRequest): Promise<PlaygroundContainerId>',
+        description: 'Create a stopped container, publishing only its declared SSH port on first start. The image owns SSH setup. A failed or timed-out response may still leave a Docker resource.',
+        parameters: [{ name: 'request', description: 'Image, SSH metadata, and optional image startup inputs.' }],
+        returns: 'Canonical container id; use list() to recover ambiguous Docker outcomes.',
+      },
+      {
+        signature: 'list(): Promise<PlaygroundContainer[]>',
+        description: 'List fresh observations of containers bearing this namespace\'s ownership label.',
+        parameters: [],
+        returns: 'Running and stopped containers; concurrent removals are omitted.',
+      },
+      {
+        signature: 'get(id: PlaygroundContainerId): Promise<PlaygroundContainer>',
+        description: 'Read a container and enforce namespace ownership.',
+        parameters: [{ name: 'id', description: 'Full Docker id returned by this service.' }],
+        returns: 'Current Docker state and its published SSH destination, if running.',
+      },
+      {
+        signature: 'start(id: PlaygroundContainerId): Promise<PlaygroundContainer>',
+        description: 'Start an owned container; already-running containers succeed.',
+        parameters: [{ name: 'id', description: 'Full Docker id returned by this service.' }],
+        returns: 'Fresh Docker state; the SSH server may still be starting.',
+      },
+      {
+        signature: 'stop(id: PlaygroundContainerId): Promise<PlaygroundContainer>',
+        description: 'Stop an owned container using the configured Docker grace period; already-stopped succeeds.',
+        parameters: [{ name: 'id', description: 'Full Docker id returned by this service.' }],
+        returns: 'Fresh Docker state after stop.',
+      },
+      {
+        signature: 'remove(id: PlaygroundContainerId): Promise<void>',
+        description: 'Delete an owned stopped container. Docker refuses running containers; volumes are retained.',
+        parameters: [{ name: 'id', description: 'Full Docker id returned by this service.' }],
+      },
+    ],
+  },
+  {
     key: 'sandbox',
     summary: 'Abstract process-sandbox service.',
     description: 'Abstract process-sandbox service. confine must return enforcing argv or fail closed at wrap or runner-execution time; silent unconfined passthrough is forbidden. Functional probes arbitrate multi-runner chains and may be skipped for a sole candidate, whose own refusal remains the fail-closed end.',
@@ -4023,6 +4065,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface CreateAgentOptions {\n    readonly sessionId: SessionId;\n    readonly parentAgent?: Agent;\n    readonly meta?: {\n        readonly cwd?: string;\n        readonly parentSession?: SessionId;\n        readonly isSeeded?: boolean;\n        readonly origin?: \'subagent\';\n        readonly delegationDepth?: number;\n        readonly agentPreset?: string;\n    };\n    readonly inheritedEventCount?: SessionLogOffset;\n    readonly seed?: readonly SessionEvent[];\n    readonly agentOptions?: AgentOptions;\n    readonly signal?: AbortSignal;\n    readonly setup?: AgentSetup;\n}',
   },
   {
+    name: 'CreateContainerRequest',
+    declaration: 'export interface CreateContainerRequest {\n    image: string;\n    name?: string;\n    sshPort: number;\n    username: string;\n    command?: string[];\n    env?: Record<string, string>;\n}',
+  },
+  {
     name: 'CreateGoalRequest',
     declaration: 'export interface CreateGoalRequest {\n    readonly objective: string;\n    readonly maxGoalRounds?: number;\n}',
   },
@@ -4753,6 +4799,14 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'PermissionSelect',
     declaration: 'export interface PermissionSelect {\n    options: PresetOption[];\n    currentValue: string;\n}',
+  },
+  {
+    name: 'PlaygroundContainer',
+    declaration: 'export interface PlaygroundContainer {\n    id: PlaygroundContainerId;\n    name: string;\n    image: string;\n    status: string;\n    sshPort: number;\n    username: string;\n    ssh: SshEndpoint | null;\n}',
+  },
+  {
+    name: 'PlaygroundContainerId',
+    declaration: 'export type PlaygroundContainerId = Branded<\'PlaygroundContainerId\'>;',
   },
   {
     name: 'PostToolDecision',
@@ -5693,6 +5747,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'SpillSource',
     declaration: 'export type SpillSource = {\n    kind: \'tool\';\n    toolName: string;\n    callId: ToolCallId;\n    label: string;\n} | {\n    kind: \'session-reference\';\n    sessionId: SessionId;\n    label: string;\n};',
+  },
+  {
+    name: 'SshEndpoint',
+    declaration: 'export interface SshEndpoint {\n    host: string;\n    port: number;\n    username: string;\n}',
   },
   {
     name: 'StorageBackend',

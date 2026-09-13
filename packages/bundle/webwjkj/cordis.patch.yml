@@ -6,3 +6,13 @@
         port: 3081
     - id: webwjkj-home
       name: '@deepseek-ai/dsh-webwjkj'
+      config:
+        auth:
+          root: !!js dshHomePath('webwjkj')
+          publicOrigin: !!js process.env.WEBWJKJ_PUBLIC_ORIGIN || 'http://127.0.0.1:3081'
+          sms: !!js >-
+            process.env.WEBWJKJ_SMS_APP_ID ? ({ sdkAppId: process.env.WEBWJKJ_SMS_APP_ID, signName: process.env.WEBWJKJ_SMS_SIGN, templateId: process.env.WEBWJKJ_SMS_TEMPLATE_ID, region: process.env.WEBWJKJ_SMS_REGION, secretIdEnv: 'TENCENTCLOUD_SECRET_ID', secretKeyEnv: 'TENCENTCLOUD_SECRET_KEY' }) : undefined
+          mail: !!js >-
+            process.env.WEBWJKJ_SMTP_HOST ? ({ host: process.env.WEBWJKJ_SMTP_HOST, port: Number(process.env.WEBWJKJ_SMTP_PORT), secure: process.env.WEBWJKJ_SMTP_SECURE === 'true', user: process.env.WEBWJKJ_SMTP_USER, passwordEnv: 'WEBWJKJ_SMTP_PASSWORD', from: process.env.WEBWJKJ_SMTP_FROM }) : undefined
+          wechat: !!js >-
+            process.env.WEBWJKJ_WECHAT_APP_ID ? ({ appId: process.env.WEBWJKJ_WECHAT_APP_ID, secretEnv: 'WEBWJKJ_WECHAT_APP_SECRET' }) : undefined

@@ -1,4 +1,4 @@
-/** Platform-neutral IM records shared by host services and human panels. */
+/** Platform-neutral IM records shared by host services and channel adapters. */
 
 import type { Branded } from '@deepseek-ai/dsh-brand'
 import type { FileAttachmentRef, ImageAttachmentRef } from '@deepseek-ai/dsh-attachment/types'

@@ -10,7 +10,7 @@ webwjkj 需要独立开发的首页，不继承官方 Web 应用的聊天界面�
 
 ## Decision
 
-[webwjkj bundle](../../../../packages/bundle/webwjkj/README.zh.md) 自行维护首页、类型化语言字典和响应式样式。完整插件树仅包含现有 HTTP 服务和一个页面插件。应用通过专用 dsh profile 启动，遵循[应用启动规则](../../../../docs/architecture.zh.md#application-launch)。
+[webwjkj bundle](../../../../packages/bundle/webwjkj/README.zh.md) 自行维护首页、类型化语言字典和响应式样式。完整插件树仅包含现有 HTTP 服务和一个页面插件。应用通过专用 dsh profile 启动，遵循[应用启动规则](../../../../docs/architecture.zh.md)。
 
 ## Alternatives considered
 
@@ -20,4 +20,4 @@ webwjkj 需要独立开发的首页，不继承官方 Web 应用的聊天界面�
 
 ## Consequences
 
-首页无需模型凭据即可运行，并可独立演进。公开路由不包含用户数据；私有功能需要明确的访问控制设计。首版不提供聊天或持久化。包内 HTML 预期输出及真实 Loader/HTTP 测试验证两种语言、请求方法处理和卸载。现有 profile 和 HTTP 组合决策继续有效；本模块不取代它们。
+首页无需模型凭据即可运行，并可独立演进。公开路由不包含用户数据；私有功能需要明确的访问控制设计。它不提供聊天；私有账号和工作台遵循[账号与工作台决策](2026-09-13-webwjkj-accounts-workbench.zh.md)。包内 HTML 预期输出及真实 Loader/HTTP 测试验证两种语言、请求方法处理和卸载。现有 profile 和 HTTP 组合决策继续有效；本模块不取代它们。

@@ -135,7 +135,7 @@
   "references": [
     { "path": "./packages/storage/tool-data-lake" },
     { "path": "./packages/storage/data-lake" },
-    { "path": "./packages/bundle/webwjkj" },
+    { "path": "./packages/bundle/webwjkj/tsconfig.host.json" },
     { "path": "./packages/interaction/wecom" },
     { "path": "./packages/interaction/im" },
     { "path": "./packages/client/ui-deliverables/tsconfig.host.json" },
@@ -357,6 +357,7 @@
     { "path": "./packages/host/plugin-inventory" },
     { "path": "./packages/llm/plugin-package-inventory-deepseek" },
     { "path": "./packages/host/webserver" },
+    { "path": "./packages/playground/playground" },
     { "path": "./packages/sdk/client" },
     { "path": "./packages/sdk/protocol" },
     { "path": "./packages/lsp/lsp" },

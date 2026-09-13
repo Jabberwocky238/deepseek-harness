@@ -1,7 +1,7 @@
 /** Typed homepage copy owned by webwjkj. */
 const zh = {
   language: 'zh-CN', switchLanguage: 'English', switchPath: '/en',
-  navigation: '主导航', home: '首页', about: '关于',
+  navigation: '主导航', home: '首页', about: '关于', account: '我的账号',
   eyebrow: '你的下一步，从这里开始', title: '让想法，有一个新的起点。',
   description: '欢迎来到 webwjkj。一个简洁、专注的空间，留给你的想法，也留给接下来要创造的可能。',
   action: '探索这个空间', secondary: '了解 webwjkj',
@@ -24,7 +24,7 @@ export const locales: Record<Locale, typeof zh> = {
   zh,
   en: {
     language: 'en', switchLanguage: '中文', switchPath: '/',
-    navigation: 'Main navigation', home: 'Home', about: 'About',
+    navigation: 'Main navigation', home: 'Home', about: 'About', account: 'My account',
     eyebrow: 'YOUR NEXT CHAPTER STARTS HERE', title: 'A fresh start for your ideas.',
     description: 'Welcome to webwjkj. A simple, focused space for your ideas and everything you will create next.',
     action: 'Explore this space', secondary: 'Meet webwjkj',

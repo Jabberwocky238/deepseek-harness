@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-webwjkj provides an independent responsive homepage with introduction cards, an about section, and Chinese/English navigation. It mounts only the HTTP carrier and its own page plugin, requiring no model key. This local development module uses a dedicated profile without depending on the official Web application.
+webwjkj is an independent web application with a public homepage, Tencent Cloud SMS login, UUID profiles, email and WeChat binding, and an authenticated multi-panel workbench. It uses a dedicated profile without the official Web application or model credentials.
 
 ## Table of Contents
 
@@ -45,6 +45,32 @@ Open `http://127.0.0.1:3081/` for Chinese or `/en` for English. Installation add
 
 Override the `webwjkj-server` row in the profile’s `cordis.patch.yml` to change the listening address and port; replacement config must include both host and port. A port conflict fails startup.
 
+Sign in at `/login` to enter `/workspace`. Dockview provides sidebars around two equal central work areas; tabs can be moved, closed, split, and reopened, and dividers resize groups. Layouts and notes are stored per user UUID in the current browser; narrow screens start with the two central groups. `/account` manages usernames, HTTPS avatar URLs, email verification, and WeChat QR binding.
+
+Configure these variables in the launch environment; keep credentials in local environment settings or a secret manager. Unconfigured services display as unavailable; incomplete configuration fails loading. Use HTTPS in production and set `WEBWJKJ_PUBLIC_ORIGIN` to the public origin.
+
+```sh
+WEBWJKJ_PUBLIC_ORIGIN=https://web.example.com
+WEBWJKJ_SMS_APP_ID=your-sdk-app-id
+WEBWJKJ_SMS_SIGN=your-approved-sign
+WEBWJKJ_SMS_TEMPLATE_ID=your-approved-template-id
+WEBWJKJ_SMS_REGION=ap-guangzhou
+TENCENTCLOUD_SECRET_ID=your-secret-id
+TENCENTCLOUD_SECRET_KEY=your-secret-key
+WEBWJKJ_SMTP_HOST=smtp.example.com
+WEBWJKJ_SMTP_PORT=465
+WEBWJKJ_SMTP_SECURE=true
+WEBWJKJ_SMTP_USER=your-smtp-user
+WEBWJKJ_SMTP_PASSWORD=your-smtp-password
+WEBWJKJ_SMTP_FROM=no-reply@example.com
+WEBWJKJ_WECHAT_APP_ID=your-website-app-id
+WEBWJKJ_WECHAT_APP_SECRET=your-app-secret
+```
+
+The Tencent SMS template takes one verification-code parameter; this version accepts mainland China `+86` numbers. SMTP delivers a code to the new email address before binding. WeChat uses Open Platform website `snsapi_login` authorization with callback `${WEBWJKJ_PUBLIC_ORIGIN}/api/auth/callback/wechat`; configure its authorization domain in WeChat. Each user can bind one WeChat account, and each WeChat account belongs to one user.
+
+Accounts and login sessions persist in `$DSH_HOME/webwjkj/accounts.sqlite`; the signing key is the adjacent `auth-secret`. Back up both the database and key. Omitting plugin `auth` configuration serves only the public homepage. [Config](src/auth-config.ts) owns delivery intervals, daily limits, code lifetime, attempt limits, session lifetime, and request size.
+
 -----
 
 <a id="understand-the-implementation"></a>
@@ -53,9 +79,9 @@ Override the `webwjkj-server` row in the profile’s `cordis.patch.yml` to chang
 <details>
 <summary>Implementation internals — click to expand</summary>
 
-The [patch](cordis.patch.yml) mounts two plugins. The [entry](src/index.ts) registers exact routes through effects; the [page](src/homepage.ts) renders HTML from [typed copy](src/locales.ts) and [styles](src/styles.ts). Pages need no scripts, external fonts, or asset requests.
+The [patch](cordis.patch.yml) mounts the HTTP carrier and page plugin. Accounts use Better Auth and Node SQLite; the official Tencent SDK sends SMS, SMTP verifies email, and WeChat endpoints exchange authorization codes and retrieve profiles. A cross-process file lock serializes account operations against concurrent OTP consumption; database versions advance monotonically.
 
-GET and HEAD serve the homepage, other methods return 405, and unknown paths return 404. Unloading removes both routes. No invariant companion is published: the HTTP registry owns the routes and there is no independently maintained state to cross-check.
+Homepage and account forms render on the server; the workbench loads a standalone Dockview browser artifact with separate Host and Client compiler configurations. Account and workspace routes check sessions, mutations check origins, and only required forms and the WeChat callback expose authentication operations. Unloading removes routes, drains requests, and closes the database. No invariant companion is published: SQLite uniqueness constraints and authentication operations directly maintain account relationships without independent copies to cross-check.
 
 </details>
 
@@ -65,7 +91,7 @@ GET and HEAD serve the homepage, other methods return 405, and unknown paths ret
 ## Further Exploration
 
 - [HTTP server](../../host/webserver/README.md)
-- [Application launch](../../../docs/architecture.md#application-launch)
+- [Application launch](../../../docs/architecture.md)
 - [webwjkj decision](../../../.agents/notes/implemented/architecture/2026-09-13-webwjkj-homepage.md)
 
 -----
@@ -91,7 +117,7 @@ None; there are no model requests.
 
 <a id="known-limitations-and-deferred-work"></a>
 
-- The first version serves a public static homepage only, with no chat, authentication, business APIs, or data storage. Private data requires access control before exposure. This module is not published to npm; source changes require rebuilding and restarting the application.
+- The workbench provides welcome, notes, guide, and account overview panels, without code-server editors, terminals, or extensions. Layouts and notes do not synchronize across browsers. SMS, email, and WeChat require valid provider configuration; local tests replace external services and do not prove live delivery. Source changes require rebuilding and restarting.
 
 <a id="dev-note"></a>
 ### Dev Note

@@ -16,7 +16,7 @@ Each AI persists its selected group/contact page or no page. Only the selected p
 
 The [Agent scope decision](../architecture/2026-07-08-agent-scope-contexts.md) continues to own registration visibility and lifetime. The [WeCom conversation decision](2026-09-12-wecom-owned-conversations.md) owns independent external transport conversations. Neither decision is superseded.
 
-IM provides persistent messaging and Agent tools without a dedicated chat panel. External adapters own human interaction; the shared service does not need a second browser contact and conversation editor.
+IM provides persistent messaging and Agent tools without a dedicated chat panel. External adapters own human interaction; the shared service does not need a second browser contact and conversation editor. Human channel receipts follow individual receiver completion; AI receipts follow committed Session input. No display operation acknowledges unread messages.
 
 ## Alternatives considered
 

@@ -121,7 +121,11 @@ it('persists human messages, resumes offline delivery, and deduplicates ids', as
   const reopened = await harness(h.root)
   const received: string[] = []
   cleanups.push(reopened.ctx.im.register(room, other, async (message) => { received.push(message.text) }))
-  await waitFor(() => { expect(received).toEqual(['hello']) })
+  await waitFor(() => {
+    expect(received).toEqual(['hello'])
+    expect(reopened.ctx.im.history(room, other, 0)[0]?.deliveries[other]).toBe('accepted')
+    expect(reopened.ctx.im.inbox(other)).toEqual([])
+  })
   await reopened.send('hello', human, other)
   expect(reopened.ctx.im.history(room, human, 0)).toHaveLength(1)
   await expect(reopened.send('hello', other, human)).rejects.toThrow('id conflict')

@@ -510,25 +510,6 @@ export class ImService {
   }
 
   /**
-   * Mark messages observed by a human panel as accepted; this does not claim the human has read them.
-   * @param conversation - displayed conversation.
-   * @param recipient - authenticated human recipient.
-   * @param through - highest displayed sequence.
-   * @returns after durable receipt updates.
-   */
-  acceptInbox(conversation: ConversationId, recipient: ParticipantId, through: number): Promise<void> {
-    return this.mutate(async () => {
-      this.requireMember(conversation, recipient)
-      if (this.participant(recipient).kind !== 'human') throw new Error('IM panel acceptance requires a human')
-      for (const message of this.history(conversation, recipient, 0)) {
-        if (message.sequence <= through && message.recipients.includes(recipient) && message.deliveries[recipient] !== 'accepted') {
-          await this.domain.table('messages').update(message.id, current => ({ ...current, deliveries: { ...current.deliveries, [recipient]: 'accepted' } }))
-        }
-      }
-    })
-  }
-
-  /**
    * Acknowledge a message after an AI commits it as model input, or a human adapter accepts it.
    * @param id - message identity.
    * @param recipient - receiving identity.

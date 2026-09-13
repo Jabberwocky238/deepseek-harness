@@ -1,6 +1,6 @@
 {
   "name": "@deepseek-ai/dsh-webwjkj",
-  "description": "Standalone webwjkj homepage bundle with Chinese and English pages",
+  "description": "Independent webwjkj workbench with SMS login and account binding",
   "version": "0.1.5-rc.2",
   "type": "module",
   "main": "lib/index.js",
@@ -11,10 +11,15 @@
       "default": "./lib/index.js"
     },
     "./cordis.patch.yml": "./cordis.patch.yml",
-    "./package.json": "./package.json"
+    "./package.json": "./package.json",
+    "./client": {
+      "types": "./lib/types/client/index.d.ts",
+      "default": "./lib/client.js"
+    }
   },
   "files": [
     "lib/index.js",
+    "lib/client.js",
     "cordis.patch.yml",
     "lib/types/**/*.d.ts"
   ],
@@ -25,15 +30,25 @@
     }
   },
   "dependencies": {
-    "@deepseek-ai/dsh-host-webserver": "workspace:^"
+    "@deepseek-ai/dsh-atomic-write": "workspace:^",
+    "@deepseek-ai/dsh-brand": "workspace:^",
+    "@deepseek-ai/dsh-host-webserver": "workspace:^",
+    "@deepseek-ai/schemastery": "workspace:^",
+    "better-auth": "1.7.4",
+    "dockview": "^8.3.1",
+    "nodemailer": "^10.0.8",
+    "tencentcloud-sdk-nodejs-sms": "^4.1.306",
+    "zod": "^4.4.3",
+    "@deepseek-ai/dsh-util-crypto": "workspace:^"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "workspace:^"
   },
   "devDependencies": {
     "@deepseek-ai/cordis": "workspace:^",
+    "@deepseek-ai/cordis-plugin-include": "workspace:^",
     "@deepseek-ai/cordis-plugin-loader": "workspace:^",
-    "@deepseek-ai/cordis-plugin-include": "workspace:^"
+    "@types/nodemailer": "^8.0.1"
   },
   "publishConfig": {
     "access": "public"

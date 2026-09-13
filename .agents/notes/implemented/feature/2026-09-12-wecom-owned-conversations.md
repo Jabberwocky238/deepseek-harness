@@ -20,6 +20,8 @@ Message ids remain pending until processing settles, then enter a bounded comple
 
 Opt-in IM tools bind to the same bot/user or bot/group/user ownership. Separate durable namespaces prevent one Agent from discovering another user’s contacts or conversations. An explicit, matching `imBotContacts` roster shares a namespace only among the listed bots for that same user and chat. Stable bot-specific identities retain separate human conversations; mutual contacts and a shared AI direct chat permit explicit cross-bot messaging without exposing unrelated users. Each incoming WeCom callback selects its authenticated human or group page before model input. The IM service owns publication records and delivery status; the SDK sends admitted `talk` text and media to the authenticated callback’s destination. Agent effects own tools and outbound receivers. Ordinary streaming replies stay outside the IM outbox. The per-conversation publication budget survives reload; changing an existing budget requires updating its stored conversation.
 
+Outbound media uses the SDK upload protocol rather than a separate upload tool. The IM budget bounds actual bytes read from attachment storage, including providers whose stored bytes differ from reference metadata. File paths are resolved by the Agent filesystem before durable admission. Upload failures retain the IM record for explicit retry; only a completed upload can produce a media message.
+
 ## Alternatives considered
 
 **Reuse the webhook runtime.** Its fire-and-forget semantics do not provide multi-turn ownership or completion replies. Extending it for chat would change an unrelated public responsibility.

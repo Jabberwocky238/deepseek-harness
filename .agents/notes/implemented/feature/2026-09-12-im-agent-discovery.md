@@ -16,6 +16,8 @@ Each AI persists its selected group/contact page or no page. Only the selected p
 
 The [Agent scope decision](../architecture/2026-07-08-agent-scope-contexts.md) continues to own registration visibility and lifetime. The [WeCom conversation decision](2026-09-12-wecom-owned-conversations.md) owns independent external transport conversations. Neither decision is superseded.
 
+IM provides persistent messaging and Agent tools without a dedicated chat panel. External adapters own human interaction; the shared service does not need a second browser contact and conversation editor.
+
 ## Alternatives considered
 
 A global tool accepting an arbitrary participant ID permits private relationship discovery under the wrong identity. Copying contacts into the system prompt makes relationship changes stale and consumes context even when no discovery is needed.

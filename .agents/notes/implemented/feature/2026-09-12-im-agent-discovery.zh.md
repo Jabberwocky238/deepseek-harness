@@ -16,6 +16,8 @@ IM 绑定为每个 AI 身份的唯一 Agent 注册 `im_context` 和 `talk`。联
 
 [Agent 作用域决策](../architecture/2026-07-08-agent-scope-contexts.zh.md)继续负责注册可见性和生命周期。[WeCom 会话决策](2026-09-12-wecom-owned-conversations.zh.md)负责独立的外部传输会话。这两个决策均未被取代。
 
+IM 提供持久化消息与 Agent 工具，不提供独立聊天面板。外部适配器负责用户交互；共享服务不需要另设浏览器联系人与会话编辑器。
+
 ## Alternatives considered
 
 接受任意参与者 ID 的全局工具允许以错误身份查询私有关系。将联系人复制进系统提示词会让关系变更失效，并在不需要查询时也占用上下文。

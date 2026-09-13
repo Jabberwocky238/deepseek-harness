@@ -53,6 +53,9 @@ allowBuilds:
   electron-winstaller: false
   # Store-index rewriting only needs msgpackr's portable JavaScript codec.
   msgpackr-extract: false
+  # SSH uses the JavaScript implementation; native acceleration is optional.
+  cpu-features: false
+  ssh2: false
 
 minimumReleaseAgeExclude:
   # Fresh pi-ai releases carry the model catalog updates that are the whole

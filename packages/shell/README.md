@@ -26,6 +26,7 @@ The shell group provides command execution to agents: run a foreground command a
 |---|---|---|
 | [`shell`](shell/README.md) | Defines the executor contract: foreground runs, background handles, and request resolution | `ctx.shell` |
 | [`bash-local`](bash-local/README.md) | Runs Bash commands as fresh `bash -c` processes on POSIX | registers `ctx.shell` |
+| [`bash-ssh`](bash-ssh/README.md) | Runs fresh remote Bash commands through SSH PTYs with Ctrl-C interruption | registers `ctx.shell` |
 | [`bash-sandbox`](bash-sandbox/README.md) | Runs Bash commands confined through the sandbox capability, reporting denials as facts | registers `ctx.shell` |
 | [`pwsh-local`](pwsh-local/README.md) | Runs PowerShell commands as fresh `pwsh -Command` processes on Windows | registers `ctx.shell` |
 | [`pwsh-sandbox`](pwsh-sandbox/README.md) | Runs PowerShell commands confined through the sandbox capability | registers `ctx.shell` |

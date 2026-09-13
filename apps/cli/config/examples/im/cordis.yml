@@ -13,10 +13,3 @@
     workspacePath: !!js process.cwd()
     agentPreset: standard
     permissionPreset: workspace-write
-- id: ui-im
-  disabled: false
-  config:
-    viewerId: local-human
-    viewerName: Me
-    pollIntervalMs: 1500
-    maxAiMessages: 10000

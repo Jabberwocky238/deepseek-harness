@@ -133,7 +133,8 @@
     "scripts/client-bundle-purity.spec.ts"
   ],
   "references": [
-    { "path": "./packages/client/ui-im/tsconfig.host.json" },
+    { "path": "./packages/storage/data-lake" },
+    { "path": "./packages/bundle/webwjkj" },
     { "path": "./packages/interaction/wecom" },
     { "path": "./packages/interaction/im" },
     { "path": "./packages/client/ui-deliverables/tsconfig.host.json" },
@@ -258,6 +259,7 @@
     { "path": "./packages/llm/llm-deepseek" },
     { "path": "./packages/llm/llm-pi-ai" },
     { "path": "./packages/shell/bash-local" },
+    { "path": "./packages/shell/bash-ssh" },
     { "path": "./packages/shell/shell-env" },
     { "path": "./packages/shell/pwsh-local" },
     { "path": "./packages/shell/pwsh-sandbox" },

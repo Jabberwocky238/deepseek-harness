@@ -341,6 +341,40 @@ export type Config = LocalConfig
 
 来源：[`packages/shell/bash-sandbox/src/index.ts:36`](../packages/shell/bash-sandbox/src/index.ts)
 
+<a id="deepseek-aidsh-bash-ssh"></a>
+
+## `@deepseek-ai/dsh-bash-ssh`
+
+```ts config-catalog
+/** Fixed SSH identity, remote workspace, and remote execution limits. */
+export interface Config {
+  /** SSH server hostname or address. */
+  host: string
+  /** SSH login user. */
+  username: string
+  /** Pinned server public-key SHA-256 fingerprint: 64 lowercase hexadecimal characters. */
+  hostKeySha256: string
+  /** Absolute POSIX working directory on the remote host. */
+  cwd: string
+  /** Private key file on the host running dsh; use this or agentSocket. */
+  privateKeyFile?: string
+  /** Explicit SSH authentication-agent socket; use this or privateKeyFile. */
+  agentSocket?: string
+  /** Local workspace prefix mapped onto cwd; omit when absolute paths match. */
+  localWorkspaceRoot?: string
+  /** SSH server port (default 22). */
+  port?: number
+  /** Foreground timeout in milliseconds, enforced by remote GNU timeout with SIGINT. */
+  timeoutMs?: number
+  /** Maximum foreground timeout in milliseconds. */
+  maxTimeoutMs?: number
+  /** Per-stream retained output bytes; remote stdout/stderr share one PTY stream. */
+  maxOutputBytes?: number
+}
+```
+
+来源： [`packages/shell/bash-ssh/src/index.ts:15`](../packages/shell/bash-ssh/src/index.ts)
+
 <a id="deepseek-aidsh-client-connection"></a>
 
 ## `@deepseek-ai/dsh-client-connection`

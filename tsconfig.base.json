@@ -252,7 +252,6 @@
       // session-log-export lives under session-query/, so the generated aliases map only its
       // bare name; the browser half needs this explicit subpath for source-mode dynamic imports.
       "@deepseek-ai/dsh-session-log-export/client": ["./packages/session-query/session-log-export/src/client"],
-      "@deepseek-ai/dsh-client-ui-im": ["./packages/client/ui-im/src"],
       "@deepseek-ai/dsh-im/types": ["./packages/interaction/im/src/types.ts"],
       "@deepseek-ai/dsh-im/runtime": ["./packages/interaction/im/src/runtime.ts"],
       // BEGIN generated package aliases — pnpm run gen-tsconfig-paths
@@ -276,6 +275,7 @@
       "@deepseek-ai/dsh-base": ["./packages/bundle/base/src"],
       "@deepseek-ai/dsh-bash-local": ["./packages/shell/bash-local/src"],
       "@deepseek-ai/dsh-bash-sandbox": ["./packages/shell/bash-sandbox/src"],
+      "@deepseek-ai/dsh-bash-ssh": ["./packages/shell/bash-ssh/src"],
       "@deepseek-ai/dsh-brand": ["./packages/util/brand/src"],
       "@deepseek-ai/dsh-chunked-list": ["./packages/util/chunked-list/src"],
       "@deepseek-ai/dsh-cmdline": ["./packages/boot/cmdline/src"],
@@ -293,6 +293,7 @@
       "@deepseek-ai/dsh-credentials": ["./packages/credentials/credentials/src"],
       "@deepseek-ai/dsh-credentials/invariant": ["./packages/credentials/credentials/src/invariant.ts"],
       "@deepseek-ai/dsh-credentials-local": ["./packages/credentials/credentials-local/src"],
+      "@deepseek-ai/dsh-data-lake": ["./packages/storage/data-lake/src"],
       "@deepseek-ai/dsh-deepseek-llm-api-extensions": ["./packages/llm/deepseek-llm-api-extensions/src"],
       "@deepseek-ai/dsh-deque": ["./packages/util/deque/src"],
       "@deepseek-ai/dsh-e2b": ["./packages/e2b/e2b/src"],
@@ -456,6 +457,7 @@
       "@deepseek-ai/dsh-webhook": ["./packages/webhook/webhook/src"],
       "@deepseek-ai/dsh-webhook/invariant": ["./packages/webhook/webhook/src/invariant.ts"],
       "@deepseek-ai/dsh-webhook-github": ["./packages/webhook/webhook-github/src"],
+      "@deepseek-ai/dsh-webwjkj": ["./packages/bundle/webwjkj/src"],
       "@deepseek-ai/dsh-wecom": ["./packages/interaction/wecom/src"],
       "@deepseek-ai/dsh-win32-process": ["./packages/subprocess/win32-process/src"],
       "@deepseek-ai/dsh-workflow": ["./packages/workflow/workflow/src"],

@@ -36,6 +36,8 @@ Input text and complete replies have UTF-8 byte limits. Oversized input is rejec
 
 Mount IM storage and set `imMaxAiMessages` to enable `im_context` and `talk`; omission leaves them disabled. The example overlays enable both tools. Without a contact roster, each bot, user, and group/user conversation gets isolated IM identities and contacts. Set identical `imBotContacts` rosters on selected bots, including every bot’s ID and stable display name, to make their Agents mutual contacts for the same user and chat. An empty roster keeps bots separate. Each Agent retains its own human chat and can discover a shared AI chat through `im_context`; `talk` selects it by conversation ID. The peer starts receiving when that user has messaged its bot. Other users and groups remain separate. `talk` stores its message before sending Markdown, images, or files to the originating WeCom chat. Its result confirms durable admission, not recipient delivery. Failed deliveries remain in IM storage for explicit retry; a partially delivered message can duplicate earlier parts on retry. The budget survives restart and must match the stored conversation configuration.
 
+Outbound uploads count actual attachment bytes against the IM message budget before buffering each chunk. `talk` accepts workspace paths in `files`, for example `{"message":"","files":[{"path":"report.pdf","kind":"file"}]}`. The filesystem provider resolves relative paths from the Agent workspace. The SDK uploads the stored bytes in chunks and sends the returned media ID to the originating user or group; upload failure leaves the durable delivery failed and sends no media message for that attachment.
+
 <a id="understand-the-implementation"></a>
 ## Understand the implementation
 

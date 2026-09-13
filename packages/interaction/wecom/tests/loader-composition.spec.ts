@@ -6,6 +6,7 @@ import { pathToFileURL } from 'node:url'
 import { Context } from '@deepseek-ai/cordis'
 import Loader from '@deepseek-ai/cordis-plugin-loader'
 import Include from '@deepseek-ai/cordis-plugin-include'
+import LocalFileSystem from '@deepseek-ai/dsh-fs-local'
 import LocalAttachments from '@deepseek-ai/dsh-attachment-local'
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
 import { mountAgentLoopTestDependencies } from '@deepseek-ai/dsh-agent-loop-testkit'
@@ -80,7 +81,14 @@ afterEach(async () => {
 
 async function harness(
   overrides: Partial<Wecom.Config> = {},
-  options: { missingSecret?: boolean; rejectReplies?: boolean; preset?: boolean; secondBot?: boolean; missingIm?: boolean } = {},
+  options: {
+    missingSecret?: boolean
+    rejectReplies?: boolean
+    preset?: boolean
+    secondBot?: boolean
+    missingIm?: boolean
+    rejectUpload?: boolean
+  } = {},
 ) {
   const root = await mkdtemp(join(tmpdir(), 'dsh-wecom-'))
   cleanups.push(() => rm(root, { recursive: true, force: true }))
@@ -107,6 +115,7 @@ async function harness(
   let socket: WebSocket | undefined
   const sockets = new Map<string, WebSocket>()
   let authenticate = true
+  let rejectUpload = options.rejectUpload ?? false
   server.on('connection', (client) => {
     socket = client
     client.on('message', (data) => {
@@ -114,6 +123,7 @@ async function harness(
       frames.push(frame)
       if (frame.cmd === 'aibot_subscribe') sockets.set(String(frame.body?.['bot_id']), client)
       const rejected = (frame.cmd === 'aibot_subscribe' && !authenticate) || (frame.cmd === 'aibot_respond_msg' && options.rejectReplies)
+        || (frame.cmd === 'aibot_upload_media_finish' && rejectUpload)
       client.send(JSON.stringify({ headers: frame.headers, errcode: rejected ? 1 : 0,
         ...(frame.cmd === 'aibot_upload_media_init' ? { body: { upload_id: 'upload' } } : {}),
         ...(frame.cmd === 'aibot_upload_media_finish' ? { body: { media_id: 'media', type: 'file', created_at: 1 } } : {}),
@@ -143,6 +153,7 @@ async function harness(
         await child.plugin(JsonStorage, { root: join(root, 'data') })
         await child.plugin(StorageDomain, { backend: 'json' })
       }
+      await child.plugin(LocalFileSystem, { cwd: root })
       await child.plugin(LocalAttachments, { dshHome: root })
       await child.plugin(AgentLoop, { agents: [] })
       await child.plugin(AgentDefaultModel, { provider: 'mock', model: 'mock' })
@@ -189,7 +200,8 @@ async function harness(
   const replies = () => updates().filter(frame => frame.body?.stream?.finish === true)
   const waitReplies = async (count: number) => { await waitFor(() => { expect(replies()).toHaveLength(count) }) }
   return {
-    ctx, model, events, send, replies, updates, waitReplies, server, frames,
+    ctx, model, events, send, replies, updates, waitReplies, server, frames, root,
+    setUploadRejection(value: boolean) { rejectUpload = value },
     sendSecond(id: string) { sockets.get('bot-two')!.send(JSON.stringify({ cmd: 'aibot_msg_callback', headers: { req_id: id }, body: { msgid: id, aibotid: 'bot-two', from: { userid: 'alice' }, chattype: 'single', msgtype: 'text', text: { content: `hello ${id}` } } })) },
     sendRaw(value: string) { socket!.send(value) },
     setAuthentication(value: boolean) { authenticate = value },
@@ -313,6 +325,70 @@ describe('WeCom through Loader and a real WebSocket', () => {
     const hidden = await h.ctx.tools.execute({ name: 'im_context', arguments: {}, callId: ToolCallId('other'), agent: other, signal: new AbortController().signal })
     expect(JSON.stringify(hidden.content)).not.toContain(sender)
     expect(JSON.stringify(hidden.content)).not.toContain('alice')
+  })
+
+  it.each([false, true])('uploads workspace files through talk with failed delivery=%s and explicit retry', async (rejectUpload) => {
+    const h = await harness({ imMaxAiMessages: 10 }, { rejectUpload })
+    const bytes = Buffer.alloc(600000, 42)
+    await writeFile(join(h.root, 'report.bin'), bytes)
+    h.send('upload-tool')
+    await h.waitReplies(1)
+    const agent = h.ctx.agents.list()[0]!
+    const result = await h.ctx.tools.execute({
+      name: 'talk', arguments: { message: '', files: [{ path: 'report.bin', kind: 'file' }] },
+      callId: ToolCallId('upload'), agent, signal: new AbortController().signal,
+    })
+    expect(result.isError).not.toBe(true)
+    const sent = JSON.parse(result.content.find(block => block.type === 'text')!.text) as { id: string }
+    const context = await h.ctx.tools.execute({ name: 'im_context', arguments: {}, callId: ToolCallId('context'), agent, signal: new AbortController().signal })
+    const data = JSON.parse(context.content.find(block => block.type === 'text')!.text) as { conversations: { id: string }[]; contacts: { id: string }[] }
+    const conversation = Im.conversationIdSchema.parse(data.conversations[0]!.id)
+    const human = Im.participantIdSchema.parse(data.contacts[0]!.id)
+    const stored = () => h.ctx.im.history(conversation, human, 0).find(value => value.id === sent.id)!
+    await waitFor(() => { expect(stored().deliveries[human]).toBe(rejectUpload ? 'failed' : 'accepted') })
+    const init = h.frames.find(frame => frame.cmd === 'aibot_upload_media_init')!
+    expect(init.body).toMatchObject({ type: 'file', filename: 'report.bin', total_size: bytes.length, total_chunks: 2 })
+    const chunks = h.frames.filter(frame => frame.cmd === 'aibot_upload_media_chunk')
+      .sort((a, b) => Number(a.body?.['chunk_index']) - Number(b.body?.['chunk_index']))
+    expect(Buffer.concat(chunks.map(frame => Buffer.from(String(frame.body?.['base64_data']), 'base64')))).toEqual(bytes)
+    if (rejectUpload) {
+      expect(h.frames.filter(frame => frame.cmd === 'aibot_send_msg')).toHaveLength(0)
+      h.setUploadRejection(false)
+      await h.ctx.im.retry(Im.imMessageIdSchema.parse(sent.id), human)
+      await waitFor(() => { expect(stored().deliveries[human]).toBe('accepted') })
+    }
+    expect(h.frames.filter(frame => frame.cmd === 'aibot_send_msg').map(frame => frame.body)).toEqual([
+      { chatid: 'alice', msgtype: 'file', file: { media_id: 'media' } },
+    ])
+    expect(stored().attachments[0]).toMatchObject({ type: 'file', attachment: { name: 'report.bin', bytes: bytes.length } })
+  })
+
+  it('rejects stored file bytes exceeding the IM budget before starting an upload', async () => {
+    const h = await harness({ imMaxAiMessages: 10 })
+    h.send('oversized-storage')
+    await h.waitReplies(1)
+    const agent = h.ctx.agents.list()[0]!
+    const result = await h.ctx.tools.execute({ name: 'im_context', arguments: {}, callId: ToolCallId('context'), agent, signal: new AbortController().signal })
+    const data = JSON.parse(result.content.find(block => block.type === 'text')!.text) as { self: { id: string }; conversations: { id: string }[]; contacts: { id: string }[] }
+    const conversation = Im.conversationIdSchema.parse(data.conversations[0]!.id)
+    const human = Im.participantIdSchema.parse(data.contacts[0]!.id)
+    const file = await h.ctx.attachments.saveFile({ data: Buffer.from('small'), name: 'report.txt' })
+    // A storage provider can return bytes that disagree with persisted reference metadata.
+    const reader = vi.spyOn(h.ctx.attachments, 'readFileStream').mockImplementation(async function* () {
+      yield Buffer.alloc(h.ctx.im.attachmentLimits().maxBytes)
+      yield Buffer.from('overflow')
+    })
+    try {
+      const sent = await h.ctx.im.send({
+        id: Im.imMessageIdSchema.parse('oversized-storage'), conversation,
+        sender: Im.participantIdSchema.parse(data.self.id), recipients: [human], mode: 'queue', text: '',
+        attachments: [{ type: 'file', attachment: file }],
+      })
+      await waitFor(() => { expect(h.ctx.im.history(conversation, human, 0).find(value => value.id === sent.id)?.deliveries[human]).toBe('failed') })
+      expect(h.frames.filter(frame => frame.cmd.startsWith('aibot_upload_media') || frame.cmd === 'aibot_send_msg')).toEqual([])
+    } finally {
+      reader.mockRestore()
+    }
   })
 
   it('logs durable images and files and passes image content to the model', async () => {

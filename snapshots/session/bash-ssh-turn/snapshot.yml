@@ -1,0 +1,9 @@
+version: 1
+scenario: bash-ssh-turn
+profile: headless
+composition: bash-ssh
+recording: authored
+header:
+  class: bash-ssh
+  pin: true
+platform: posix

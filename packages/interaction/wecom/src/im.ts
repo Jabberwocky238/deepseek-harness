@@ -60,16 +60,22 @@ export async function bindImConversation(
     yield attachAgent(ctx, im, participant, agent)
     yield im.register(conversation, human, async (message, signal) => {
       signal.throwIfAborted()
+      let remaining = im.attachmentLimits().maxBytes
       if (message.text !== '') {
         await client.sendMessage(destination, { msgtype: 'markdown', markdown: { content: limitReply(message.text, maxReplyBytes) } })
       }
       for (const part of message.attachments) {
         signal.throwIfAborted()
         const chunks: Uint8Array[] = []
-        if (part.type === 'image') chunks.push((await ctx.attachments.readImage(part.attachment)).data)
+        const append = (chunk: Uint8Array): void => {
+          remaining -= chunk.byteLength
+          if (remaining < 0) throw new Error('WeCom upload exceeds the IM attachment byte limit')
+          chunks.push(chunk)
+        }
+        if (part.type === 'image') append((await ctx.attachments.readImage(part.attachment)).data)
         else for await (const chunk of ctx.attachments.readFileStream(part.attachment)) {
           signal.throwIfAborted()
-          chunks.push(chunk)
+          append(chunk)
         }
         signal.throwIfAborted()
         const media = await client.uploadMedia(Buffer.concat(chunks), {

@@ -491,6 +491,3 @@
     - id: im-runtime
       name: '@deepseek-ai/dsh-im/runtime'
       disabled: true
-    - id: ui-im
-      name: '@deepseek-ai/dsh-client-ui-im'
-      disabled: true

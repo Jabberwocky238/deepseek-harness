@@ -52,7 +52,7 @@ kind: "package-reference"
 
 <a id="known-limitations-and-deferred-work"></a>
 
-- 可选的 IM Web 配置和面板仍需整合浏览器验证。联系人关系不暴露外部平台地址。包内测试覆盖展示输出和脚本模型日志；正式 profile 的录制 Session 回放和完整运行时恢复测试尚未完成。
+- 联系人关系不暴露外部平台地址。包内测试覆盖展示输出和脚本模型日志；正式 profile 的录制 Session 回放和完整运行时恢复测试尚未完成。
 
 <a id="dev-note"></a>
 ### 开发备注

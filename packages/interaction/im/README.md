@@ -52,7 +52,7 @@ Discovery appends a tool result to the Session; it does not rewrite earlier mess
 
 <a id="known-limitations-and-deferred-work"></a>
 
-- The optional IM Web overlay and panel require assembled-browser validation. Contact membership does not expose external platform addresses. Package tests cover rendered output and scripted-model logging; shipped-profile recorded Session replay and exhaustive runtime recovery coverage remain outstanding.
+- Contact membership does not expose external platform addresses. Package tests cover rendered output and scripted-model logging; shipped-profile recorded Session replay and exhaustive runtime recovery coverage remain outstanding.
 
 <a id="dev-note"></a>
 ### Dev Note

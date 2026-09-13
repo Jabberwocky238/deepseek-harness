@@ -1,0 +1,8 @@
+- insert:
+    - id: webwjkj-server
+      name: '@deepseek-ai/dsh-host-webserver'
+      config:
+        host: 127.0.0.1
+        port: 3081
+    - id: webwjkj-home
+      name: '@deepseek-ai/dsh-webwjkj'

@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-webwjkj is an independent web application with a public homepage, Tencent Cloud SMS login, UUID profiles, email and WeChat binding, and an authenticated multi-panel workbench. It uses a dedicated profile without the official Web application or model credentials.
+webwjkj is an independent web application with a public homepage, SMS, password, email, and WeChat login, UUID profiles, email and WeChat binding, and an authenticated multi-panel workbench. It uses a dedicated profile without the official Web application or model credentials.
 
 ## Table of Contents
 
@@ -45,7 +45,9 @@ Open `http://127.0.0.1:3081/` for Chinese or `/en` for English. Installation add
 
 Override the `webwjkj-server` row in the profile’s `cordis.patch.yml` to change the listening address and port; replacement config must include both host and port. A port conflict fails startup.
 
-Sign in at `/login` to enter `/workspace`. Dockview provides sidebars around two equal central work areas; tabs can be moved, closed, split, and reopened, and dividers resize groups. Layouts and notes are stored per user UUID in the current browser; narrow screens start with the two central groups. `/account` manages usernames, HTTPS avatar URLs, email verification, and WeChat QR binding.
+The `/login` page offers four parallel methods: SMS code, login username and password, email code, and WeChat QR authorization. Each successful login opens `/workspace`. First phone, email, or WeChat verification creates a UUID user; configure a 3–30 character login username and 12–128 character password in `/account` to enable password login. Changing an existing password requires the current password. Phone, email, and WeChat identities can be verified and bound in account settings; linked identities sign in to the same UUID. Unlinked identities are not automatically merged.
+
+Dockview provides sidebars around two equal central work areas; tabs can be moved, closed, split, and reopened, and dividers resize groups. Layouts and notes are stored per user UUID in the current browser; narrow screens start with the two central groups. `/account` manages usernames, HTTPS avatar URLs, email verification, and WeChat QR binding.
 
 Configure these variables in the launch environment; keep credentials in local environment settings or a secret manager. Unconfigured services display as unavailable; incomplete configuration fails loading. Use HTTPS in production and set `WEBWJKJ_PUBLIC_ORIGIN` to the public origin.
 
@@ -69,7 +71,7 @@ WEBWJKJ_WECHAT_APP_SECRET=your-app-secret
 
 The Tencent SMS template takes one verification-code parameter; this version accepts mainland China `+86` numbers. SMTP delivers a code to the new email address before binding. WeChat uses Open Platform website `snsapi_login` authorization with callback `${WEBWJKJ_PUBLIC_ORIGIN}/api/auth/callback/wechat`; configure its authorization domain in WeChat. Each user can bind one WeChat account, and each WeChat account belongs to one user.
 
-Accounts and login sessions persist in `$DSH_HOME/webwjkj/accounts.sqlite`; the signing key is the adjacent `auth-secret`. Back up both the database and key. Omitting plugin `auth` configuration serves only the public homepage. [Config](src/auth-config.ts) owns delivery intervals, daily limits, code lifetime, attempt limits, session lifetime, and request size.
+Accounts and login sessions persist in `$DSH_HOME/webwjkj/accounts.sqlite`; the signing key is the adjacent `auth-secret`. Back up both the database and key. Omitting plugin `auth` configuration serves only the public homepage. [Config](src/auth-config.ts) owns delivery intervals, daily limits, code lifetime, attempt limits, session lifetime, and request size. Schema version 1 upgrades transactionally to version 2 on startup, adding a nullable unique login username while preserving existing UUIDs; newer database versions are rejected.
 
 -----
 

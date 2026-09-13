@@ -1,4 +1,5 @@
 /** Tencent SMS, SMTP, and WeChat website authorization adapters. */
+import { createHash } from 'node:crypto'
 import { sms } from 'tencentcloud-sdk-nodejs-sms'
 import nodemailer from 'nodemailer'
 import { genericOAuth } from 'better-auth/plugins'
@@ -57,10 +58,10 @@ export function createDelivery(config: AuthConfig) {
 }
 
 /**
- * Configure WeChat's GET token exchange and profile API for explicit account linking.
+ * Configure WeChat's GET token exchange and profile API for login and explicit account linking.
  * @param config - website application credentials.
  * @param timeoutMs - bound on each provider request.
- * @returns Better Auth OAuth plugin with signup disabled.
+ * @returns Better Auth OAuth plugin with verified provider identity signup.
  */
 export function wechatProvider(config: WechatConfig, timeoutMs: number) {
   const secret = credential(config.secretEnv)
@@ -77,7 +78,7 @@ export function wechatProvider(config: WechatConfig, timeoutMs: number) {
     providerId: 'wechat', clientId: config.appId,
     authorizationUrl: 'https://open.weixin.qq.com/connect/qrconnect#wechat_redirect',
     authorizationUrlParams: { appid: config.appId }, scopes: ['snsapi_login'],
-    pkce: false, disableSignUp: true,
+    pkce: false, disableSignUp: false,
     async getToken({ code }) {
       const token = tokenSchema.parse(await get('/sns/oauth2/access_token', {
         appid: config.appId, secret, code, grant_type: 'authorization_code',
@@ -90,7 +91,7 @@ export function wechatProvider(config: WechatConfig, timeoutMs: number) {
         access_token: token.access_token, openid: token.openid, lang: 'zh_CN',
       }))
       if (profile.openid !== token.openid) throw new Error('WECHAT_IDENTITY_MISMATCH')
-      return { id: profile.openid, name: profile.nickname, image: profile.headimgurl, emailVerified: false }
+      return { id: profile.openid, name: profile.nickname || 'webwjkj', image: profile.headimgurl?.startsWith('https://') ? profile.headimgurl : undefined, email: `${createHash('sha256').update(config.appId + ':' + profile.openid).digest('hex')}@wechat.webwjkj.invalid`, emailVerified: false }
     },
   }] })
 }

@@ -10,6 +10,8 @@ import type { Locale } from './locales.ts'
 
 const phoneSchema = z.string().transform(value => value.replace(/[\s-]/g, '')).transform(value => value.startsWith('+') ? value : `+86${value}`).pipe(z.string().regex(/^\+861[3-9]\d{9}$/))
 const codeSchema = z.string().regex(/^\d{6}$/)
+const passwordSchema = z.string().min(12).max(128)
+const loginNameSchema = z.string().trim().toLowerCase().regex(/^[a-z0-9_.]{3,30}$/)
 const emailSchema = z.email().max(254).transform(value => value.toLowerCase())
 
 /**
@@ -50,13 +52,13 @@ export async function handleAccount(runtime: AccountRuntime, req: IncomingMessag
   }
   try {
     if (url.pathname === '/api/auth/callback/wechat' && req.method === 'GET') {
-      if (!config.wechat || !(await runtime.user(headers))) { redirect(`/login?lang=${locale}`); return }
+      if (!config.wechat) { redirect(`/login?lang=${locale}`); return }
       const response = await runtime.handle(new Request(url, { headers }))
       const cookies = response.headers.getSetCookie()
       if (cookies.length) res.setHeader('Set-Cookie', cookies)
       const location = response.headers.get('location')
       const target = location ? new URL(location, config.publicOrigin) : null
-      if (target?.origin === config.publicOrigin && target.pathname === '/account') { redirect(target.pathname + target.search); return }
+      if (target?.origin === config.publicOrigin && ['/account', '/workspace', '/login'].includes(target.pathname)) { redirect(target.pathname + target.search); return }
       await page('invalid', 400)
       return
     }
@@ -102,18 +104,47 @@ export async function handleAccount(runtime: AccountRuntime, req: IncomingMessag
     locale = form.get('lang') === 'en' ? 'en' : 'zh'
     const user = await runtime.user(headers)
     const isSms = url.pathname === '/account/sms/send' || url.pathname === '/account/sms/verify'
-    if (!isSms && !user) { redirect(`/login?lang=${locale}`); return }
+    const isLogin = ['/account/login/password', '/account/login/email/send', '/account/login/email/verify', '/account/login/wechat'].includes(url.pathname)
+    if (!isSms && !isLogin && !user) { redirect(`/login?lang=${locale}`); return }
     let result: Response
     let notice: AccountNotice = 'saved'
     switch (url.pathname) {
       case '/account/sms/send':
-      case '/account/sms/verify': {
+      case '/account/sms/verify':
+      case '/account/phone/send':
+      case '/account/phone/verify': {
         if (!config.sms) { await page('unavailable', 503); return }
         phone = phoneSchema.parse(form.get('phone'))
         const send = url.pathname.endsWith('/send')
-        result = await call(send ? '/phone-number/send-otp' : '/phone-number/verify', send ? { phoneNumber: phone } : { phoneNumber: phone, code: codeSchema.parse(form.get('code')) })
+        result = await call(send ? '/phone-number/send-otp' : '/phone-number/verify', send ? { phoneNumber: phone } : { phoneNumber: phone, code: codeSchema.parse(form.get('code')), ...url.pathname.startsWith('/account/phone/') ? { updatePhoneNumber: true } : {} })
         if (result.ok && !send) { redirect(`/workspace?lang=${locale}`); return }
         notice = 'sent'
+        break
+      }
+      case '/account/login/password':
+        result = await call('/sign-in/username', { username: loginNameSchema.parse(form.get('username')), password: passwordSchema.parse(form.get('password')) })
+        if (result.ok) { redirect(`/workspace?lang=${locale}`); return }
+        break
+      case '/account/login/email/send':
+      case '/account/login/email/verify': {
+        if (!config.mail) { await page('unavailable', 503); return }
+        email = emailSchema.parse(form.get('email'))
+        const send = url.pathname.endsWith('/send')
+        result = await call(send ? '/email-otp/send-verification-otp' : '/sign-in/email-otp', send ? { email, type: 'sign-in' } : { email, otp: codeSchema.parse(form.get('otp')), name: 'webwjkj' })
+        if (result.ok && !send) { redirect(`/workspace?lang=${locale}`); return }
+        notice = 'sent'
+        break
+      }
+      case '/account/username':
+        result = await call('/update-user', { username: loginNameSchema.parse(form.get('username')) })
+        break
+      case '/account/password': {
+        const newPassword = passwordSchema.parse(form.get('newPassword'))
+        result = user?.hasPassword
+          ? await call('/change-password', { newPassword, currentPassword: passwordSchema.parse(form.get('currentPassword')), revokeOtherSessions: true })
+          : await runtime.setPassword(headers, newPassword)
+        const cookies = result.headers.getSetCookie()
+        if (cookies.length) res.setHeader('Set-Cookie', cookies)
         break
       }
       case '/account/profile':
@@ -128,10 +159,12 @@ export async function handleAccount(runtime: AccountRuntime, req: IncomingMessag
         notice = send ? 'sent' : 'saved'
         break
       }
+      case '/account/login/wechat':
       case '/account/wechat': {
         if (!config.wechat) { await page('unavailable', 503); return }
-        if (user?.wechat) { await page('invalid', 409); return }
-        result = await call('/link-social', { provider: 'wechat', callbackURL: `/account?lang=${locale}`, errorCallbackURL: `/account?lang=${locale}` })
+        const signingIn = url.pathname === '/account/login/wechat'
+        if (!signingIn && user?.wechat) { await page('invalid', 409); return }
+        result = await call(signingIn ? '/sign-in/social' : '/link-social', { provider: 'wechat', callbackURL: `/${signingIn ? 'workspace' : 'account'}?lang=${locale}`, errorCallbackURL: `/${signingIn ? 'login' : 'account'}?lang=${locale}` })
         if (result.ok) {
           const data = z.object({ url: z.url() }).parse(await result.json())
           if (new URL(data.url).origin !== 'https://open.weixin.qq.com') throw new Error('Unexpected authorization URL')

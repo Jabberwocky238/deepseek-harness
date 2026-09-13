@@ -4,8 +4,8 @@ import { mkdir, open, readFile, writeFile } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
 import { createHmac, randomBytes, randomUUID } from 'node:crypto'
 import { betterAuth } from 'better-auth'
-import { APIError, getSessionFromCtx } from 'better-auth/api'
-import { phoneNumber, emailOTP } from 'better-auth/plugins'
+import { APIError } from 'better-auth/api'
+import { phoneNumber, emailOTP, username } from 'better-auth/plugins'
 import { getMigrations } from 'better-auth/db/migration'
 import { withFileLock } from '@deepseek-ai/dsh-atomic-write'
 import { brandString } from '@deepseek-ai/dsh-brand'
@@ -15,7 +15,7 @@ import type { AuthConfig } from './auth-config.ts'
 import type { AccountUser, UserId } from './account-types.ts'
 
 /** Physical schema version; successors must increase it and preserve existing users. */
-export const AUTH_SCHEMA_VERSION = 1
+export const AUTH_SCHEMA_VERSION = 2
 
 /** Username accepted from the account form. */
 export const usernameSchema = z.string().trim().min(1).max(40)
@@ -31,6 +31,8 @@ export interface AccountRuntime {
   config: AuthConfig
   /** Execute one request against Better Auth, without publishing its other endpoints. */
   handle(request: Request): Promise<Response>
+  /** Set the first password for a recently authenticated account. */
+  setPassword(headers: Headers, newPassword: string): Promise<Response>
   /** Read a safe user view for a browser cookie. */
   user(headers: Headers): Promise<AccountUser | null>
   /** Unregister callers before closing; drains all acquired operations. */
@@ -65,7 +67,7 @@ export async function createAccountRuntime(config: AuthConfig): Promise<AccountR
     const db = new DatabaseSync(filename)
     try {
       const version = db.prepare('PRAGMA user_version').get()?.['user_version']
-      if (version !== 0 && version !== AUTH_SCHEMA_VERSION) throw new Error('webwjkj: unsupported authentication schema version')
+      if (version !== 0 && version !== 1 && version !== AUTH_SCHEMA_VERSION) throw new Error('webwjkj: unsupported authentication schema version')
       db.exec('PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON; PRAGMA synchronous = FULL;')
       function reserveSend(recipient: string) {
         db.prepare('DELETE FROM wjkj_send_limits WHERE windowStart < ?').run(Date.now() - 86400000)
@@ -82,6 +84,7 @@ export async function createAccountRuntime(config: AuthConfig): Promise<AccountR
       const auth = betterAuth({
         appName: 'webwjkj', baseURL: config.publicOrigin, basePath: '/api/auth', secret, database: db,
         trustedOrigins: [config.publicOrigin],
+        emailAndPassword: { enabled: true, disableSignUp: true, minPasswordLength: 12, maxPasswordLength: 128 },
         advanced: { cookiePrefix: 'webwjkj', database: { generateId: () => randomUUID() }, ipAddress: { ipAddressHeaders: ['x-webwjkj-peer-ip'] } },
         session: { expiresIn: config.sessionSeconds, cookieCache: { enabled: false } },
         rateLimit: { enabled: true, storage: 'database', window: 60, max: config.requestsPerMinute },
@@ -92,17 +95,10 @@ export async function createAccountRuntime(config: AuthConfig): Promise<AccountR
             if (user.image != null) avatarSchema.parse(user.image)
             return Promise.resolve({ data: user })
           } } },
-          account: { create: { before: async (account, ctx) => {
-            if (account.providerId === 'wechat') {
-              if (!ctx || (await getSessionFromCtx(ctx))?.user.id !== account.userId) throw new APIError('UNAUTHORIZED')
-            }
-            return { data: account }
-          } }, update: { before: async (account, ctx) => {
-            if (account.providerId === 'wechat' && (!ctx || !(await getSessionFromCtx(ctx)))) throw new APIError('UNAUTHORIZED')
-            return { data: account }
-          } } },
+
         },
         plugins: [
+          username({ displayUsername: false }),
           phoneNumber({
             expiresIn: config.otpSeconds, allowedAttempts: config.otpAttempts,
             phoneNumberValidator: value => /^\+86[1][3-9]\d{9}$/.test(value),
@@ -110,7 +106,7 @@ export async function createAccountRuntime(config: AuthConfig): Promise<AccountR
             async sendOTP({ phoneNumber: phone, code }) { reserveSend(`sms:${phone}`); await delivery.sms(phone, code) },
           }),
           emailOTP({
-            expiresIn: config.otpSeconds, allowedAttempts: config.otpAttempts, storeOTP: 'hashed', disableSignUp: true,
+            expiresIn: config.otpSeconds, allowedAttempts: config.otpAttempts, storeOTP: 'hashed', disableSignUp: false,
             changeEmail: { enabled: true },
             async sendVerificationOTP({ email, otp }) { reserveSend(`email:${email.toLowerCase()}`); await delivery.email(email, otp) },
           }),
@@ -118,6 +114,13 @@ export async function createAccountRuntime(config: AuthConfig): Promise<AccountR
         ],
         logger: { disabled: true },
       })
+      if (version === 1) {
+        db.exec(`BEGIN IMMEDIATE;
+          ALTER TABLE user ADD COLUMN username TEXT;
+          CREATE UNIQUE INDEX user_username_unique ON user(username);
+          PRAGMA user_version = 2;
+          COMMIT;`)
+      }
       const migration = await getMigrations(auth.options)
       if (version === 0) {
         await migration.runMigrations()
@@ -141,13 +144,14 @@ export async function createAccountRuntime(config: AuthConfig): Promise<AccountR
       return {
         config,
         handle: request => run(() => auth.handler(request)),
+        setPassword: (headers, newPassword) => run(() => auth.api.setPassword({ headers, body: { newPassword }, asResponse: true })),
         user: headers => run(async () => {
           const session = await auth.api.getSession({ headers })
           if (!session) return null
           const user = session.user
           const id = brandString<UserId>(z.uuid().parse(user.id))
           const accounts = await auth.api.listUserAccounts({ headers })
-          return { id, name: user.name, phone: user.phoneNumber ?? '', email: user.emailVerified ? user.email : null, image: user.image ?? null, wechat: accounts.some(account => account.providerId === 'wechat') }
+          return { id, name: user.name, loginName: user.username ?? null, hasPassword: accounts.some(account => account.providerId === 'credential'), phone: user.phoneNumber ?? '', email: user.emailVerified ? user.email : null, image: user.image ?? null, wechat: accounts.some(account => account.providerId === 'wechat') }
         }),
         async close() { closed = true; await Promise.allSettled([...pending]); delivery.close(); db.close() },
       }

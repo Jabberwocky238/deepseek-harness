@@ -10,6 +10,10 @@ export interface AccountUser {
   id: UserId
   /** Display username. */
   name: string
+  /** Unique normalized username for password login, when configured. */
+  loginName: string | null
+  /** Whether credential login has been configured. */
+  hasPassword: boolean
   /** Verified phone number in E.164 form. */
   phone: string
   /** Verified optional email, never the internal phone-signup placeholder. */

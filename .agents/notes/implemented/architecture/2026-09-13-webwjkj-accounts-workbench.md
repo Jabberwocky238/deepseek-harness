@@ -12,6 +12,8 @@ The independent webwjkj application needs verified phone identities, optional em
 
 [webwjkj](../../../../packages/bundle/webwjkj/README.md) owns a dedicated SQLite account database and uses Better Auth for sessions and verification, the Tencent Cloud SDK for SMS, SMTP for email, and Open Platform website OAuth for WeChat. User IDs are UUIDs. Authenticated forms expose only required operations; a cross-process lock serializes code verification, and unique indexes enforce one WeChat account per user and one owner per WeChat account. Production origins require HTTPS.
 
+Four parallel login methods use verified phone or email codes, username/password credentials, or WeChat OAuth. New verified identities create UUID users; explicit bindings reuse an existing UUID. Username login uses Better Auth’s username plugin and password hashing, with no public password signup endpoint. Schema version 2 adds the nullable unique username field through a transactional migration from version 1. WeChat signup uses an unverified internal placeholder email because its profile API does not supply email addresses; that placeholder never appears as a bound email.
+
 Dockview owns browser tabs, splits, resizing, and layout serialization. The browser entry has its own compiler configuration and artifact; it does not use the official Web composition. The initial layout places two equal central work groups between sidebars, with per-user local browser layout and note storage. Account settings remain a separately protected page.
 
 ## Alternatives considered

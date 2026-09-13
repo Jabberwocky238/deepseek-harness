@@ -20,8 +20,8 @@ export function mapLocation(directory: string, revision: string): LakeMapLocatio
   }
 }
 
-function fingerprint(entries: readonly LakeEntry[]): string {
-  return createHash('sha256').update(JSON.stringify(entries)).digest('hex')
+function fingerprint(value: unknown): string {
+  return createHash('sha256').update(JSON.stringify(value)).digest('hex')
 }
 
 function changes(previous: readonly LakeEntry[], current: readonly LakeEntry[]): LakeChange[] {
@@ -69,7 +69,8 @@ export class LakeIndexer {
 
   private async readMap(location: LakeMapLocation, signal: AbortSignal): Promise<LakeDirectoryRecord> {
     const map = mapSchema.parse(await this.source.read(location.mapPath, signal))
-    if (map.path !== location.directory || map.revision !== location.revision || fingerprint(map.entries) !== map.revision) {
+    const expectedRevision = fingerprint({ entries: map.entries, previousRevision: map.previousRevision })
+    if (map.path !== location.directory || map.revision !== location.revision || expectedRevision !== map.revision) {
       throw new Error('data-lake: map does not match its indexed revision')
     }
     return map
@@ -128,14 +129,16 @@ export class LakeIndexer {
         if (child === undefined) throw new Error(`data-lake: child directory map is missing: ${entry.path}`)
         return { ...entry, revision: child.revision }
       })
-      const revision = fingerprint(entries)
-      const location = mapLocation(directory.path, revision)
       const before = previousLocations.get(directory.path)
-      if (before?.revision !== revision) {
-        const old = before ? await this.readMap(before, signal) : null
+      const old = before ? await this.readMap(before, signal) : null
+      const unchanged = old !== null && fingerprint(old.entries) === fingerprint(entries)
+      const previousRevision = before?.revision ?? null
+      const revision = unchanged ? old.revision : fingerprint({ entries, previousRevision })
+      const location = mapLocation(directory.path, revision)
+      if (!unchanged) {
         const previousSummary = before ? await this.readSummary(before, signal) ?? old?.previousSummary ?? null : null
         const record: LakeDirectoryRecord = {
-          version: 1, path: directory.path, parent: directory.parent, depth: directory.depth, revision, entries,
+          version: 1, path: directory.path, parent: directory.parent, depth: directory.depth, revision, previousRevision, entries,
           changes: changes(old?.entries ?? [], entries), previousSummary,
         }
         await this.source.write(location.mapPath, record, signal)

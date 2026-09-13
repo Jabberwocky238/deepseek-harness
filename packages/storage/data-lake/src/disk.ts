@@ -51,7 +51,6 @@ export class DiskLakeSource implements LakeSource {
       throw new Error('data-lake: invalid metadata location')
     }
     const target = join(parent, METADATA, suffix)
-    if (create) await mkdir(dirname(target), { recursive: true })
     // Metadata directories are owned by this provider, never followed through links.
     for (const component of [join(parent, METADATA), dirname(target), target]) {
       try {
@@ -60,6 +59,7 @@ export class DiskLakeSource implements LakeSource {
         if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
       }
     }
+    if (create) await mkdir(dirname(target), { recursive: true })
     return target
   }
 

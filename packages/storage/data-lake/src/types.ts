@@ -66,6 +66,7 @@ export interface LakeDirectoryRecord {
   readonly parent: string | null
   readonly depth: number
   readonly revision: string
+  readonly previousRevision: string | null
   readonly entries: readonly LakeEntry[]
   readonly changes: readonly LakeChange[]
   readonly previousSummary: LakeSummary | null

@@ -30,14 +30,14 @@ const path = z.string().transform(lakePath)
 const revision = z.string().regex(/^[a-f0-9]{64}$/)
 const entry = z.object({
   path, name: z.string(), kind: z.enum(['file', 'directory', 'symlink', 'other']),
-  bytes: z.number().nonnegative().finite(), modifiedAt: z.string().optional(),
+  bytes: z.number().nonnegative(), modifiedAt: z.string().optional(),
   etag: z.string().optional(), revision: revision.optional(),
 })
 const root = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('disk'), path: z.string().min(1) }),
   z.object({
     kind: z.literal('s3'), bucket: z.string().min(1), prefix: z.string(), region: z.string().min(1),
-    endpoint: z.string().url().optional(), forcePathStyle: z.boolean().optional(),
+    endpoint: z.url().optional(), forcePathStyle: z.boolean().optional(),
   }),
 ])
 
@@ -45,7 +45,8 @@ const root = z.discriminatedUnion('kind', [
 export const summarySchema: z.ZodType<LakeSummary> = z.object({ version: z.literal(1), revision, text: z.string().min(1) })
 /** Directory map schema validated at metadata reads. */
 export const mapSchema: z.ZodType<LakeDirectoryRecord> = z.object({
-  version: z.literal(1), path, parent: path.nullable(), depth: z.number().int().nonnegative(), revision,
+  version: z.literal(1), path, parent: path.nullable(), depth: z.number().int().nonnegative(),
+  revision, previousRevision: revision.nullable(),
   entries: z.array(entry), changes: z.array(z.object({ path, kind: z.enum(['added', 'modified', 'removed']) })),
   previousSummary: summarySchema.nullable(),
 })

@@ -6,7 +6,7 @@ import { Context } from '@deepseek-ai/cordis'
 import DataLake, { LakeId } from '../src/index.ts'
 import { LakeIndexer } from '../src/catalog.ts'
 import { DiskLakeSource } from '../src/disk.ts'
-import { INDEX_PATH } from '../src/records.ts'
+import { catalogSchema, mapSchema, INDEX_PATH } from '../src/records.ts'
 
 const roots: string[] = []
 const contexts: Context[] = []
@@ -33,7 +33,7 @@ describe('colocated directory maps', () => {
     expect(a.map.entries.map(entry => entry.path)).toEqual(['a/empty/', 'a/note.txt'])
     expect(a.summary).toBeNull()
     const location = first.maps.find(map => map.directory === 'a/')!
-    expect(JSON.parse(await readFile(join(root, location.mapPath), 'utf8')).path).toBe('a/')
+    expect(mapSchema.parse(JSON.parse(await readFile(join(root, location.mapPath), 'utf8'))).path).toBe('a/')
     await indexer.summarize('a/', a.map.revision, 'One note and an empty directory.', signal)
     const originalRoot = (await indexer.directory('', signal))!
     await indexer.summarize('', originalRoot.map.revision, 'Root contents.', signal)
@@ -62,9 +62,10 @@ describe('colocated directory maps', () => {
     await expect(limited.scan(signal)).rejects.toThrow('maxEntries')
     expect(await readFile(join(root, INDEX_PATH), 'utf8')).toBe(before)
     await expect(indexer.directory('../', signal)).rejects.toThrow('relative path')
-    const broken = JSON.parse(before)
-    broken.maps[0].mapPath = '../secret.json'
-    await writeFile(join(root, INDEX_PATH), JSON.stringify(broken))
+    const broken = structuredClone(catalogSchema.parse(JSON.parse(before)))
+    const brokenMaps = broken.maps.map(map => ({ ...map }))
+    brokenMaps[0]!.mapPath = '../secret.json'
+    await writeFile(join(root, INDEX_PATH), JSON.stringify({ ...broken, maps: brokenMaps }))
     await expect(indexer.catalog(signal)).rejects.toThrow('map location')
   })
 

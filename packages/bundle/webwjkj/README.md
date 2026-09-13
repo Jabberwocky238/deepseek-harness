@@ -77,7 +77,7 @@ GET and HEAD serve the homepage, other methods return 405, and unknown paths ret
 
 #### What the model sees
 
-None; this application mounts no agent, model, tool, or Session service.
+None; `GET /` and `GET /en` serve browser-only HTML. This application mounts no agent, model, tool, or Session service.
 
 #### Token effect
 

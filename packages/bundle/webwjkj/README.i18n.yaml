@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/bundle/webwjkj/README.md
-README.md: 19ca4a3d846606dafd275a569df5cb85487911d1
-README.zh.md: b4a5b056f2d1b0331546bf46bfb930bc9167c92b
+README.md: 393f6c405cd658d0eb223aa5b7eae75d84710e7c
+README.zh.md: 13a01a553fc0a6a438fcd579d4d21515781f7872

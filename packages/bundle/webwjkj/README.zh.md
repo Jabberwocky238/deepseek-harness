@@ -77,7 +77,7 @@ GET 和 HEAD 返回首页，其他方法返回 405，未知路径返回 404。�
 
 #### 模型看到的内容
 
-None；此应用不挂载 Agent、模型、工具或 Session 服务。
+None；`GET /` 和 `GET /en` 仅向浏览器提供 HTML。此应用不挂载 Agent、模型、工具或 Session 服务。
 
 #### Token 影响
 

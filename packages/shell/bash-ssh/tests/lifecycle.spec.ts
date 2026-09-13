@@ -33,7 +33,8 @@ afterEach(async () => {
   await Promise.all(roots.splice(0).map(ctx => ctx.fiber.dispose()))
   wire.clients.length = 0
 })
-const config = { host: 'host', username: 'agent', hostKeySha256: 'a'.repeat(64), cwd: '/remote', agentSocket: '/agent.sock' }
+const baseConfig = { host: 'host', username: 'agent', hostKeySha256: 'a'.repeat(64), cwd: '/remote' }
+const config = { ...baseConfig, agentSocket: '/agent.sock' }
 async function setup() {
   const ctx = new Context()
   roots.push(ctx)
@@ -62,7 +63,10 @@ describe('SSH lifecycle and invalid deployment inputs', () => {
   ])('rejects invalid configuration %j', async (override) => {
     const ctx = new Context()
     roots.push(ctx)
-    await expect(Promise.resolve(ctx.plugin(SshBashExecutor, { ...config, ...override }))).rejects.toThrow('bash-ssh:')
+    const { agentSocket, ...input } = { ...config, ...override }
+    await expect(Promise.resolve(ctx.plugin(SshBashExecutor, {
+      ...input, ...(agentSocket === undefined ? {} : { agentSocket }),
+    }))).rejects.toThrow('bash-ssh:')
   })
 
   it('validates output budgets at request resolution', async () => {
@@ -154,7 +158,7 @@ describe('SSH lifecycle and invalid deployment inputs', () => {
       await writeFile(key, 'test private key')
       const ctx = new Context()
       roots.push(ctx)
-      await ctx.plugin(SshBashExecutor, { ...config, agentSocket: undefined, privateKeyFile: key })
+      await ctx.plugin(SshBashExecutor, { ...baseConfig, privateKeyFile: key })
       const controller = new AbortController()
       const result = ctx.shell.run(ctx.shell.resolve({ command: 'true', signal: controller.signal }))
       controller.abort()
@@ -168,7 +172,7 @@ describe('SSH lifecycle and invalid deployment inputs', () => {
   it('rejects a missing private-key file before connecting', async () => {
     const ctx = new Context()
     roots.push(ctx)
-    await ctx.plugin(SshBashExecutor, { ...config, agentSocket: undefined, privateKeyFile: '/dev/null/missing-key' })
+    await ctx.plugin(SshBashExecutor, { ...baseConfig, privateKeyFile: '/dev/null/missing-key' })
     await expect(ctx.shell.run(ctx.shell.resolve({ command: 'true' }))).rejects.toThrow()
     expect(wire.clients).toHaveLength(0)
   })

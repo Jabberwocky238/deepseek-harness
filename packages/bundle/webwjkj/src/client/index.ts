@@ -1,9 +1,10 @@
 /** Independent account and IM UI built on the cloned VS Code grid and dialog widgets. */
 import { z } from 'zod'
-import { randomUUID } from '@deepseek-ai/dsh-util-crypto'
 import { locale, t } from './copy.ts'
 import { node, type Ui, type View, type Disposable } from './ui.ts'
 import { renderSecurity } from './security.ts'
+import { responsiveWorkbench } from './responsive.ts'
+import { mountComposer } from './composer.ts'
 const selection = z.object({ id: z.string(), name: z.string(), kind: z.enum(['contact', 'group']) })
 const directorySchema = z.object({ entries: z.array(selection) })
 const profileSchema = z.object({ id: z.uuid(), name: z.string(), image: z.string().nullable() })
@@ -15,7 +16,9 @@ const inboxSchema = z.object({
 })
 const historySchema = z.object({
   agentError: z.boolean().optional(),
-  messages: z.array(z.object({ sender: z.string(), text: z.string(), own: z.boolean() })),
+  messages: z.array(z.object({ sender: z.string(), text: z.string(), own: z.boolean(),
+    attachments: z.array(z.object({ type: z.enum(['image', 'file']), name: z.string(), bytes: z.number(), url: z.string() })).optional(),
+  })),
 })
 type Selection = z.infer<typeof selection>
 type Panel = {
@@ -31,9 +34,10 @@ type Group = {
   active?: string | undefined
 }
 const userId = z.uuid().parse(document.body.dataset['userId'])
-async function request(path: string, form?: Record<string, string>, allowFailure = false): Promise<Response> {
+async function request(path: string, form?: Record<string, string> | FormData, allowFailure = false): Promise<Response> {
+  if (form instanceof FormData) form.set('lang', locale)
   const result = await fetch(path, {
-    credentials: 'same-origin', cache: 'no-store', ...form ? { method: 'POST', body: new URLSearchParams({ ...form, lang: locale }) } : {},
+    credentials: 'same-origin', cache: 'no-store', ...form ? { method: 'POST', body: form instanceof FormData ? form : new URLSearchParams({ ...form, lang: locale }) } : {},
   })
   if (result.status === 401 || path !== '/account/logout' && result.redirected && new URL(result.url).pathname === '/login') {
     location.assign(`/login?lang=${locale}`)
@@ -43,13 +47,14 @@ async function request(path: string, form?: Record<string, string>, allowFailure
     throw new Error('Account operation failed')
   return result
 }
-async function json(path: string, form?: Record<string, string>): Promise<unknown> {
+async function json(path: string, form?: Record<string, string> | FormData): Promise<unknown> {
   return (await request(path, form)).json() as Promise<unknown>
 }
 async function boot(): Promise<void> {
   const source = '/workspace/ui/ui.js'
   const ui = await import(source) as Ui
   const disposables: Disposable[] = []
+  const responsive: { current?: ReturnType<typeof responsiveWorkbench> } = {}
   const shell = node('div', 'wj-workbench')
   const header = node('header', 'titlebar')
   const heading = node('span', 'window-title', 'webwjkj')
@@ -173,8 +178,10 @@ async function boot(): Promise<void> {
     }
     heading.textContent = panel ? `${panel.title} — webwjkj` : 'webwjkj'
     document.title = heading.textContent
-    if (panel)
+    if (panel) {
+      responsive.current?.show(group.view.element, panel.title)
       run(() => panel.render(group.body))
+    }
     else if (groups[0] === group)
       group.body.append(node('div', 'empty-workspace', t.empty))
   }
@@ -232,7 +239,7 @@ async function boot(): Promise<void> {
   let right: Group | undefined
   let bottom: Group | undefined
   const resize = new ResizeObserver(() => {
-    grid.layout(workspace.clientWidth, workspace.clientHeight)
+    if (!responsive.current || shell.dataset['layout'] === 'desktop') grid.layout(workspace.clientWidth, workspace.clientHeight)
   })
   resize.observe(workspace)
   disposables.push({ dispose: () => {
@@ -281,6 +288,9 @@ async function boot(): Promise<void> {
       })
       row.className = 'contact-row'
       row.role = 'listitem'
+      row.replaceChildren(node('span', 'contact-name', item.name))
+      const subtitle = node('span', 'contact-preview', item.kind === 'group' ? t.groups : item.id === 'webwjkj:default-agent' ? t.aiAssistant : t.startChat)
+      row.append(subtitle)
       row.prepend(node('span', `contact-avatar codicon codicon-${item.kind === 'group' ? 'organization' : item.id === 'webwjkj:default-agent' ? 'hubot' : 'account'}`))
       if (item.kind === 'group')
         row.append(node('small', '', t.groups))
@@ -298,14 +308,7 @@ async function boot(): Promise<void> {
     open({
       id: `${item.kind}:${item.id}`, title: item.name, async render(element) {
         const messages = node('div', 'messages')
-        const composer = node('form', 'composer')
-        const input = node('textarea')
-        input.placeholder = t.message
-        input.ariaLabel = t.message
-        const send = node('button', 'wj-button', t.send)
-        send.type = 'submit'
-        composer.append(input, send)
-        element.append(messages, composer)
+        element.append(messages)
         const query = new URLSearchParams({ kind: item.kind, id: item.id })
         function history(data: unknown): void {
           messages.replaceChildren()
@@ -313,7 +316,30 @@ async function boot(): Promise<void> {
           const records = parsed.messages
           for (const record of records) {
             const article = node('article', record.own ? 'own' : '')
-            article.append(node('small', '', record.sender), node('p', '', record.text))
+            const avatar = node('span', `message-avatar${record.own ? ' self' : ''}`, record.sender.slice(0, 1))
+            if (!record.own && item.id === 'webwjkj:default-agent') {
+              avatar.textContent = ''
+              avatar.classList.add('codicon', 'codicon-hubot')
+            }
+            avatar.ariaHidden = 'true'
+            article.append(avatar, node('small', '', record.sender), node('p', '', record.text))
+            for (const file of record.attachments ?? []) {
+              const link = node('a', 'message-attachment')
+              link.href = file.url
+              link.target = '_blank'
+              link.rel = 'noopener'
+              if (file.type === 'image') {
+                const image = node('img', 'message-image')
+                image.src = file.url
+                image.alt = file.name
+                image.loading = 'lazy'
+                link.append(image)
+              } else {
+                link.download = file.name
+                link.append(node('span', 'codicon codicon-file'), node('span', '', file.name), node('small', '', `${Math.ceil(file.bytes / 1024)} KB`))
+              }
+              article.append(link)
+            }
             messages.append(article)
           }
 
@@ -323,31 +349,16 @@ async function boot(): Promise<void> {
           messages.scrollTop = messages.scrollHeight
         }
         history(await json(`/account/im/history?${query}`))
-        let pendingMessage: { text: string; id: string } | undefined
-        composer.onsubmit = (event) => {
-          event.preventDefault()
-          if (!input.value.trim())
-            return
-          send.disabled = true
-          input.disabled = true
-          if (!pendingMessage || pendingMessage.text !== input.value) pendingMessage = { text: input.value, id: randomUUID() }
-          const submitted = pendingMessage
+        mountComposer(element, async (payload) => {
           const waiting = node('p', 'muted', t.agentThinking)
           if (item.id === 'webwjkj:default-agent') messages.append(waiting)
-          run(async () => {
-            try {
-              const data = historySchema.parse(await json(`/account/im/message?${query}`, { text: submitted.text, messageId: submitted.id }))
-              history(data)
-              if (!data.agentError) { input.value = ''; pendingMessage = undefined }
-              await refresh()
-            }
-            finally {
-              waiting.remove()
-              send.disabled = false
-              input.disabled = false
-            }
-          })
-        }
+          try {
+            const data = historySchema.parse(await json(`/account/im/message?${query}`, payload))
+            history(data)
+            await refresh()
+            return !data.agentError
+          } finally { waiting.remove() }
+        })
       },
     })
   }
@@ -520,6 +531,14 @@ async function boot(): Promise<void> {
       split('right')
     } },
   ])
+  responsive.current = responsiveWorkbench({
+    shell, sidebar, editor: top.view.element,
+    layoutDesktop: () =>{  grid.layout(workspace.clientWidth, workspace.clientHeight) },
+    contacts: () => { search.value = ''; renderContacts() },
+    notifications, profile, settings, security, addFriend, createGroup,
+    account: async () => accountSchema.parse(await json('/account/me')),
+  })
+  disposables.push(responsive.current)
   window.addEventListener('pagehide', () => {
     for (const disposable of disposables.reverse())
       disposable.dispose()

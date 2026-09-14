@@ -70,28 +70,28 @@ export function apply(ctx: Context, config: Config): void {
         setup(agentCtx) { installModelSelection(agentCtx, { current: selection, assembled: undefined }) },
       })
       let text = ''
-      let completed = false
+      const outcome = { completed: false }
       const remove = ctx.on('session/event', (session, event) => {
         if (session !== handle.agent.session) return
         if (event.type === 'assistant/message' && !event.data.interrupted) {
           text += event.data.message.content.filter(part => part.type === 'text').map(part => part.text).join('')
         }
-        if (event.type === 'turn/end') completed = event.data.reason.kind === 'completed' || event.data.reason.kind === 'max-tokens'
+        if (event.type === 'turn/end') outcome.completed = event.data.reason.kind === 'completed' || event.data.reason.kind === 'max-tokens'
       })
-      const cancel = () => handle.agent.cancel({ kind: 'user' })
+      const cancel = () =>{  handle.agent.cancel({ kind: 'user' }) }
       signal.addEventListener('abort', cancel, { once: true })
       try {
         signal.throwIfAborted()
         const messages = history.filter(message => message.sequence <= input.sequence).slice(-config.historyMessages)
-          .map(message => ({ role: message.sender === recipient ? 'assistant' : 'user', text: message.text }))
+          .map(message => ({ role: message.sender === recipient ? 'assistant' : 'user', text: message.text, ...message.attachments.length ? { files: message.attachments.map(part => part.attachment.name) } : {} }))
         handle.agent.followup(createUserMessage({
-          source: { kind: 'user' }, content: [{ type: 'text', text: JSON.stringify(messages) }],
+          source: { kind: 'user' }, content: [{ type: 'text', text: JSON.stringify(messages) }, ...input.attachments],
         }))
         // This handle belongs exclusively to this request; no other caller can add work.
         await handle.agent.whenIdle()
         signal.throwIfAborted()
         await ctx.sessions.flush(handle.agent.session)
-        if (!completed || !text.trim()) throw new Error('Default agent did not produce a reply')
+        if (!outcome.completed || !text.trim()) throw new Error('Default agent did not produce a reply')
         await ctx.im.send({ id: replyId, conversation: room.id, sender: recipient, recipients: [input.sender], text, attachments: [], mode: 'queue' })
         await ctx.im.acceptMessage(input.id, recipient)
       } finally {

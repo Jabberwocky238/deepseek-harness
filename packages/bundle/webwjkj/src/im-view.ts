@@ -1,5 +1,7 @@
 /** Authenticated IM directory, contact-based group creation, and conversation messages. */
 import { randomUUID } from 'node:crypto'
+import type { AttachmentStore } from '@deepseek-ai/dsh-attachment'
+import { admitUploads, type UploadedFile } from './im-attachments.ts'
 import { z } from 'zod'
 import { brandString } from '@deepseek-ai/dsh-brand'
 import type { ImService, ParticipantId, Conversation, ConversationId, ImMessageId, ImMessage } from '@deepseek-ai/dsh-im'
@@ -13,11 +15,14 @@ import type { AccountUser } from './account-types.ts'
  * @param peers - durably accepted account friendships to project into IM.
  * @param form - optional authenticated group creation or message form.
  * @param reply - optional model reply consumer for the default contact.
+ * @param store - configured binary attachment provider.
+ * @param uploads - multipart files submitted with this message.
  * @returns JSON data containing no authentication tokens or other users' directories.
  */
 export async function readImView(
   im: ImService, user: AccountUser, url: URL, peers: FriendProfile[] = [], form?: URLSearchParams,
   reply?: (room: Conversation, input: ImMessage) => Promise<void>,
+  store?: AttachmentStore, uploads: UploadedFile[] = [],
 ): Promise<unknown> {
   const owner = brandString<ParticipantId>(`webwjkj:${user.id}`)
   try {
@@ -95,7 +100,10 @@ export async function readImView(
   let room = group ?? (contact ? direct.get(contact.id) : undefined)
   let agentError = false
   if (url.pathname === '/account/im/message' && form) {
-    const text = z.string().trim().min(1).parse(form.get('text'))
+    const text = z.string().trim().parse(form.get('text'))
+    if (!text && !uploads.length) throw new Error('Empty message')
+    if (uploads.length && !store) throw new Error('Attachment storage is unavailable')
+    const attachments = store ? await admitUploads(im, store, uploads) : []
     if (!room && contact) {
       room = {
         id: brandString<ConversationId>(randomUUID()), name: contact.name, namespace: 'webwjkj', kind: 'direct', owner, members: [owner, contact.id], maxAiMessages: 0,
@@ -105,7 +113,7 @@ export async function readImView(
     if (!room)
       throw new Error('Missing conversation')
     const sent = await im.send({
-      id: brandString<ImMessageId>(z.uuid().parse(form.get('messageId'))), conversation: room.id, sender: owner, recipients: room.members.filter(member => member !== owner), text, attachments: [], mode: 'queue',
+      id: brandString<ImMessageId>(z.uuid().parse(form.get('messageId'))), conversation: room.id, sender: owner, recipients: room.members.filter(member => member !== owner), text, attachments, mode: 'queue',
     })
     if (contact?.id === defaultAgent) {
       try {
@@ -121,6 +129,10 @@ export async function readImView(
     name: selected.name,
     ...agentError ? { agentError: true } : {},
     messages: room ? im.history(room.id, owner, 0).map(message => ({
+      ...(message.attachments.length ? { attachments: message.attachments.map((part, index) => ({
+        type: part.type, name: part.attachment.name ?? part.type, bytes: part.attachment.bytes,
+        url: `/account/im/attachment?${new URLSearchParams({ conversation: message.conversation, message: message.id, index: String(index) })}`,
+      })) } : {}),
       id: message.id, sender: im.participant(message.sender).name, text: message.text, own: message.sender === owner,
     })) : [],
   }

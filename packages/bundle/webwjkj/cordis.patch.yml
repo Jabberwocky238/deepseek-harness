@@ -13,6 +13,10 @@
     - id: webwjkj-storage-domain
       name: '@deepseek-ai/dsh-storage-domain'
       config: { backend: json }
+    - id: webwjkj-attachments
+      name: '@deepseek-ai/dsh-attachment-local'
+      config:
+        dshHome: !!js dshHomePath('webwjkj')
     - id: webwjkj-im
       name: '@deepseek-ai/dsh-im'
       config:

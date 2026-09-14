@@ -6,6 +6,7 @@ import Storage from '@deepseek-ai/dsh-storage'
 import * as JsonStorage from '@deepseek-ai/dsh-storage-json'
 import * as StorageDomain from '@deepseek-ai/dsh-storage-domain'
 import * as Im from '@deepseek-ai/dsh-im'
+import AttachmentLocal from '@deepseek-ai/dsh-attachment-local'
 import WebServer from '@deepseek-ai/dsh-host-webserver'
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
@@ -41,7 +42,7 @@ class ReplyModel extends LlmAdapter {
     if (this.hold) {
       const signal = options.signal
       if (!signal) throw new Error('Missing cancellation signal')
-      if (!signal.aborted) await new Promise<void>(resolve => signal.addEventListener('abort', () => resolve(), { once: true }))
+      if (!signal.aborted) await new Promise<void>((resolve) =>{  signal.addEventListener('abort', () =>{  resolve() }, { once: true }) })
       signal.throwIfAborted()
     }
     if (this.fail) throw new Error('External model unavailable')
@@ -107,6 +108,8 @@ async function harness(localTestAccount = false, model?: ReplyModel, timeoutMs =
   config: { root: ${JSON.stringify(join(root, 'im'))} }
 - name: '@deepseek-ai/dsh-storage-domain'
   config: { backend: json }
+- name: '@deepseek-ai/dsh-attachment-local'
+  config: { dshHome: ${JSON.stringify(join(root, 'attachments'))} }
 - name: '@deepseek-ai/dsh-im'
   config: { maxParticipants: 20, maxConversations: 20, maxMessages: 100, maxTextBytes: 16384, maxAttachmentBytes: 1048576, maxAttachments: 10 }
 ${agentRows}- name: '@deepseek-ai/dsh-host-webserver'
@@ -127,7 +130,7 @@ ${agentRows}- name: '@deepseek-ai/dsh-host-webserver'
   ctx.loader.builtins.include = Include
   const modules = new Map<string, unknown>([['@deepseek-ai/dsh-storage', Storage], ['@deepseek-ai/dsh-storage-json', JsonStorage], ['@deepseek-ai/dsh-storage-domain', StorageDomain], ['@deepseek-ai/dsh-im', Im], ['@deepseek-ai/dsh-host-webserver', WebServer], ['@deepseek-ai/dsh-webwjkj', Homepage]])
   for (const [name, plugin] of Object.entries({
-    '@deepseek-ai/dsh-llm': Llm, '@deepseek-ai/dsh-agent-default-model': AgentDefaultModel,
+    '@deepseek-ai/dsh-attachment-local': AttachmentLocal, '@deepseek-ai/dsh-llm': Llm, '@deepseek-ai/dsh-agent-default-model': AgentDefaultModel,
     '@deepseek-ai/dsh-session': SessionStore, '@deepseek-ai/dsh-session-persistence-jsonl': SessionPersistence,
     '@deepseek-ai/dsh-session-projection': SessionProjections, '@deepseek-ai/dsh-system-prompt': SystemPrompt,
     '@deepseek-ai/dsh-tools': Tools, '@deepseek-ai/dsh-agent': AgentRegistry, '@deepseek-ai/dsh-agent-loop': AgentLoop,
@@ -147,11 +150,11 @@ ${agentRows}- name: '@deepseek-ai/dsh-host-webserver'
   function browser() {
     const cookies = new Map<string, string>()
     return {
-      async request(path: string, form?: Record<string, string>, foreign = false) {
+      async request(path: string, form?: Record<string, string> | FormData, foreign = false) {
         const response = await fetch(origin + path, {
           method: form ? 'POST' : 'GET', redirect: 'manual',
-          headers: { Cookie: [...cookies].map(([key, value]) => `${key}=${value}`).join('; '), ...form ? { Origin: foreign ? 'https://untrusted.test' : origin, 'Content-Type': 'application/x-www-form-urlencoded' } : {} },
-          ...form ? { body: new URLSearchParams(form).toString() } : {},
+          headers: { Cookie: [...cookies].map(([key, value]) => `${key}=${value}`).join('; '), ...form ? { Origin: foreign ? 'https://untrusted.test' : origin, ...form instanceof FormData ? {} : { 'Content-Type': 'application/x-www-form-urlencoded' } } : {} },
+          ...form ? { body: form instanceof FormData ? form : new URLSearchParams(form).toString() } : {},
         })
         for (const cookie of response.headers.getSetCookie()) {
           const part = cookie.split(';')[0]!
@@ -542,6 +545,12 @@ it('provides the default agent and creates private groups only from the caller�
   expect((await restored.request(history)).status).toBe(200)
 })
 
+function agentHistory(body: string) {
+  return z.object({ agentError: z.boolean().optional(), messages: z.array(z.object({
+    id: z.string(), sender: z.string(), text: z.string(), own: z.boolean(),
+  })) }).parse(JSON.parse(body))
+}
+
 it('replies to default-agent messages with isolated history, durable retries, and visible provider failures', async () => {
   const model = new ReplyModel()
   const app = await harness(true, model)
@@ -551,7 +560,7 @@ it('replies to default-agent messages with isolated history, durable retries, an
   const first = { text: '你好，记住我的暗号：蓝色风筝', messageId: 'aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa' }
   const response = await browser.request(path, first)
   expect(response.status).toBe(200)
-  const history = JSON.parse(response.body)
+  const history = agentHistory(response.body)
   expect(history.agentError).toBeUndefined()
   expect(history.messages.map(({ sender, text, own }: { sender: string; text: string; own: boolean }) => ({ sender, text, own }))).toMatchInlineSnapshot(`
     [
@@ -567,7 +576,7 @@ it('replies to default-agent messages with isolated history, durable retries, an
       },
     ]
   `)
-  expect(JSON.parse((await browser.request(path, first)).body).messages).toHaveLength(2)
+  expect(agentHistory((await browser.request(path, first)).body).messages).toHaveLength(2)
   expect(model.requests).toHaveLength(1)
   expect(model.requests[0]?.tools ?? []).toHaveLength(0)
   await browser.request(path, { text: '我的暗号是什么？', messageId: 'bbbbbbbb-bbbb-4bbb-abbb-bbbbbbbbbbbb' })
@@ -580,9 +589,9 @@ it('replies to default-agent messages with isolated history, durable retries, an
   expect(JSON.stringify(model.requests[2]?.messages)).not.toContain('蓝色风筝')
   model.fail = true
   const retry = { text: '服务恢复后重试', messageId: 'dddddddd-dddd-4ddd-addd-dddddddddddd' }
-  expect(JSON.parse((await browser.request(path, retry)).body).agentError).toBe(true)
+  expect(agentHistory((await browser.request(path, retry)).body).agentError).toBe(true)
   model.fail = false
-  const recovered = JSON.parse((await browser.request(path, retry)).body)
+  const recovered = agentHistory((await browser.request(path, retry)).body)
   expect(recovered.agentError).toBeUndefined()
   expect(recovered.messages.filter((message: { text: string }) => message.text === retry.text)).toHaveLength(1)
   await app.ctx.fiber.dispose()
@@ -590,7 +599,7 @@ it('replies to default-agent messages with isolated history, durable retries, an
   const returning = restarted.browser()
   await returning.request('/account/login/password', { username: 'admin', password: '123123' })
   const count = model.requests.length
-  expect(JSON.parse((await returning.request(path, retry)).body).messages).toEqual(recovered.messages)
+  expect(agentHistory((await returning.request(path, retry)).body).messages).toEqual(recovered.messages)
   expect(model.requests).toHaveLength(count)
 })
 
@@ -603,7 +612,7 @@ it('aborts a timed-out default-agent request and leaves its durable message retr
   const response = await browser.request('/account/im/message?kind=contact&id=webwjkj%3Adefault-agent', {
     text: 'timeout', messageId: 'eeeeeeee-eeee-4eee-aeee-eeeeeeeeeeee',
   })
-  expect(JSON.parse(response.body).agentError).toBe(true)
+  expect(agentHistory(response.body).agentError).toBe(true)
   expect(model.requests[0]?.signal?.aborted).toBe(true)
 })
 
@@ -622,4 +631,70 @@ it('drains active default-agent requests when its plugin is disposed', async () 
   await app.ctx.fiber.dispose()
   await settled
   expect(model.requests[0]?.signal?.aborted).toBe(true)
+})
+
+
+it('stores uploaded pictures and files once and restricts downloads to conversation members', async () => {
+  const app = await harness(true)
+  const owner = app.browser(), other = app.browser()
+  await owner.request('/account/login/password', { username: 'admin', password: '123123' })
+  await other.request('/account/sms/send', { phone: '13800138130' })
+  await other.request('/account/sms/verify', { phone: '13800138130', code: delivery.sms.get('+8613800138130')! })
+  const group = JSON.parse((await owner.request('/account/im/group', { name: '附件群', members: '["webwjkj:default-agent"]' })).body) as { id: string }
+  const path = `/account/im/message?kind=group&id=${group.id}`
+  const upload = new FormData()
+  upload.set('text', '')
+  upload.set('messageId', '12345678-1234-4234-8234-123456789abc')
+  upload.append('attachments', new File(['hello attachment'], 'hello.txt', { type: 'text/plain' }))
+  const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAACXBIWXMAAAPoAAAD6AG1e1JrAAAADElEQVQImWNgZGIGAAAOAAeCcsnOAAAAAElFTkSuQmCC', 'base64')
+  upload.append('attachments', new File([png], 'pixel.png', { type: 'image/png' }))
+  expect((await app.browser().request(path, upload)).status).toBe(401)
+  expect((await owner.request(path, upload, true)).status).toBe(403)
+  const response = await owner.request(path, upload)
+  expect(response.status, response.body).toBe(200)
+  const data = z.object({ messages: z.array(z.object({
+    text: z.string(), attachments: z.array(z.object({ name: z.string(), type: z.string(), url: z.string() })),
+  })) }).parse(JSON.parse(response.body))
+  const presentation = data.messages.map(message => ({
+    text: message.text, attachments: message.attachments.map(({ name, type }) => ({ name, type })),
+  }))
+  expect(presentation).toMatchInlineSnapshot(`
+    [
+      {
+        "attachments": [
+          {
+            "name": "hello.txt",
+            "type": "file",
+          },
+          {
+            "name": "pixel.png",
+            "type": "image",
+          },
+        ],
+        "text": "",
+      },
+    ]
+  `)
+  expect(z.object({ messages: z.array(z.unknown()) }).parse(JSON.parse((await owner.request(path, upload)).body)).messages).toHaveLength(1)
+  for (const attachment of data.messages[0]!.attachments) {
+    expect((await owner.request(attachment.url)).status).toBe(200)
+    expect((await other.request(attachment.url)).status).toBe(403)
+    expect((await app.browser().request(attachment.url)).status).toBe(401)
+  }
+  const fileUrl = data.messages[0]!.attachments[0]!.url
+  expect((await owner.request(fileUrl)).body).toBe('hello attachment')
+  const oversized = new FormData()
+  oversized.set('text', '')
+  oversized.set('messageId', '12345678-1234-4234-8234-123456789abd')
+  oversized.append('attachments', new File([new Uint8Array(1100000)], 'large.bin'))
+  expect((await owner.request(path, oversized)).status).toBe(413)
+  const invalidImage = new FormData()
+  invalidImage.set('text', '')
+  invalidImage.set('messageId', '12345678-1234-4234-8234-123456789abe')
+  invalidImage.append('attachments', new File(['not an image'], 'bad.png', { type: 'image/png' }))
+  expect((await owner.request(path, invalidImage)).status).toBe(400)
+  await app.ctx.fiber.dispose()
+  const restarted = await harness(true), restored = restarted.browser()
+  await restored.request('/account/login/password', { username: 'admin', password: '123123' })
+  expect((await restored.request(fileUrl)).body).toBe('hello attachment')
 })

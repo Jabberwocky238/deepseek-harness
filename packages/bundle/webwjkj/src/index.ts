@@ -6,6 +6,8 @@ import type {} from './default-agent.ts'
 import { workspaceAssets } from './workspace-assets.ts'
 import { fileURLToPath } from 'node:url'
 import { readImView } from './im-view.ts'
+import { readImAttachment } from './im-attachments.ts'
+import type {} from '@deepseek-ai/dsh-attachment'
 import { renderHomepage } from './homepage.ts'
 import type { Locale } from './locales.ts'
 import { Config } from './auth-config.ts'
@@ -61,11 +63,17 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
           for (const [path, kind] of [['/account', 'prefix'], ['/login', 'exact'], ['/workspace', 'prefix'], ['/api/auth/callback/wechat', 'exact']] as const) {
             disposers.push(ctx.webServer.register({ kind, path, handler(req, res) {
               if (!accepting) { res.writeHead(503); res.end(); return }
-              const work = handleAccount(runtime, req, res, async (user, url, form) => {
+              const work = handleAccount(runtime, req, res, async (user, url, form, uploads) => {
                 const im = ctx.get('im')
                 if (!im) throw new Error('webwjkj requires IM for the contact directory')
-                return readImView(im, user, url, await runtime.acceptedFriends(user.id), form, ctx.get('webwjkjAgent')?.reply)
-              }, assets)
+                const agent = ctx.get('webwjkjAgent')
+                return readImView(im, user, url, await runtime.acceptedFriends(user.id), form, agent ? (room, message) => agent.reply(room, message) : undefined, ctx.get('attachments'), uploads)
+              }, assets, ctx.get('im')?.attachmentLimits().maxBytes ?? 0, async (user, url) => {
+                const im = ctx.get('im')
+                const store = ctx.get('attachments')
+                if (!im || !store) throw new Error('Attachment storage is unavailable')
+                return readImAttachment(im, store, user, url)
+              })
               pending.add(work)
               void work.then(() => pending.delete(work), () => pending.delete(work))
               return work

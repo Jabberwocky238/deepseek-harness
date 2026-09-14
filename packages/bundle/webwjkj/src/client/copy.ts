@@ -1,5 +1,7 @@
 /** Locale-owned UI text for the independent workbench. */
 const zh = {
+  attachments: '添加图片或文件', images: '图片', files: '文件', removeFile: '移除文件', sending: '正在发送…',
+  chats: '聊天', addressBook: '通讯录', me: '我', back: '返回', more: '更多', mobileNavigation: '主导航', startChat: '点击开始聊天', aiAssistant: 'AI 助手',
   contacts: '联系人', groups: '群聊', add: '添加好友', notifications: '通知', createGroup: '发起群聊',
   search: '搜索联系人或群聊', refresh: '刷新', profile: '个人资料', settings: '设置',
   close: '关闭', cancel: '取消', save: '保存', send: '发送', logout: '退出登录',
@@ -14,6 +16,8 @@ const zh = {
   loading: '正在加载…', emptyContacts: '没有匹配的联系人或群聊',
 }
 const en: typeof zh = {
+  attachments: 'Add images or files', images: 'Images', files: 'Files', removeFile: 'Remove file', sending: 'Sending…',
+  chats: 'Chats', addressBook: 'Contacts', me: 'Me', back: 'Back', more: 'More', mobileNavigation: 'Main navigation', startChat: 'Start a conversation', aiAssistant: 'AI assistant',
   contacts: 'Contacts', groups: 'Groups', add: 'Add friend', notifications: 'Notifications', createGroup: 'Create group',
   search: 'Search contacts or groups', refresh: 'Refresh', profile: 'Profile', settings: 'Settings',
   close: 'Close', cancel: 'Cancel', save: 'Save', send: 'Send', logout: 'Sign out',

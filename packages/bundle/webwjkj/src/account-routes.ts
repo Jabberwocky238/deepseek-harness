@@ -1,5 +1,6 @@
 /** Script-free account HTTP forms over the private authentication runtime. */
 import { friendInput } from './friends.ts'
+import type { UploadedFile, AttachmentDownload } from './im-attachments.ts'
 import { readFile } from 'node:fs/promises'
 import { renderWorkspace } from './workspace-page.ts'
 import type { IncomingMessage, ServerResponse } from 'node:http'
@@ -23,11 +24,15 @@ const emailSchema = z.email().max(254).transform(value => value.toLowerCase())
  * @param res - response receiving private HTML and HttpOnly login cookies.
  * @param readIm - optional authenticated IM directory and history projection.
  * @param assets - reader confined to the installed upstream browser artifacts.
+ * @param maxUploadBytes - additional multipart byte budget from IM configuration.
+ * @param download - authorized conversation attachment reader.
  */
 export async function handleAccount(
   runtime: AccountRuntime, req: IncomingMessage, res: ServerResponse,
-  readIm?: (user: AccountUser, url: URL, form?: URLSearchParams) => Promise<unknown>,
+  readIm?: (user: AccountUser, url: URL, form?: URLSearchParams, uploads?: UploadedFile[]) => Promise<unknown>,
   assets?: (path: string) => Promise<{ content: Buffer; type: string } | undefined>,
+  maxUploadBytes = 0,
+  download?: (user: AccountUser, url: URL) => Promise<AttachmentDownload>,
 ): Promise<void> {
   const config = runtime.config
   const url = new URL(req.url ?? '/', config.publicOrigin)
@@ -100,6 +105,21 @@ export async function handleAccount(
       res.end(req.method === 'HEAD' ? undefined : content)
       return
     }
+    if (req.method === 'GET' && url.pathname === '/account/im/attachment') {
+      const user = await runtime.user(headers)
+      if (!user) { res.writeHead(401); res.end(); return }
+      if (!download) { res.writeHead(503); res.end(); return }
+      try {
+        const file = await download(user, url)
+        res.writeHead(200, {
+          'Content-Type': file.type, 'Content-Length': file.content.byteLength,
+          'Content-Disposition': file.inline ? 'inline' : 'attachment', 'Cache-Control': 'no-store',
+          'X-Content-Type-Options': 'nosniff', 'Content-Security-Policy': "default-src 'none'; sandbox",
+        })
+        res.end(file.content)
+      } catch { res.writeHead(403); res.end() }
+      return
+    }
     if (req.method === 'GET' && url.pathname === '/account/me') {
       const user = await runtime.user(headers)
       if (!user) { res.writeHead(401); res.end(); return }
@@ -128,16 +148,28 @@ export async function handleAccount(
     }
     if (req.method !== 'POST') { res.writeHead(405, { Allow: 'GET, HEAD, POST' }); res.end(); return }
     if (req.headers.origin !== config.publicOrigin) { res.writeHead(403); res.end(); return }
-    if (req.headers['content-type']?.split(';')[0] !== 'application/x-www-form-urlencoded') { res.writeHead(415); res.end(); return }
+    const multipart = url.pathname === '/account/im/message' && req.headers['content-type']?.startsWith('multipart/form-data;')
+    if (!multipart && req.headers['content-type']?.split(';')[0] !== 'application/x-www-form-urlencoded') { res.writeHead(415); res.end(); return }
+    if (multipart && !(await runtime.user(headers))) { res.writeHead(401); res.end(); return }
     let size = 0
     const chunks: Buffer[] = []
     for await (const chunk of req) {
       const bytes = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk as string)
       size += bytes.length
-      if (size > config.maxBodyBytes) { res.writeHead(413); res.end(); return }
+      if (size > config.maxBodyBytes + (multipart ? maxUploadBytes : 0)) { res.writeHead(413); res.end(); return }
       chunks.push(bytes)
     }
-    const form = new URLSearchParams(Buffer.concat(chunks).toString('utf8'))
+    let form: URLSearchParams
+    const uploads: UploadedFile[] = []
+    if (multipart) {
+      const data = await new Response(Buffer.concat(chunks), { headers: { 'Content-Type': req.headers['content-type'] ?? '' } }).formData()
+      form = new URLSearchParams()
+      for (const [key, value] of data) {
+        if (typeof value === 'string') form.append(key, value)
+        else if (key === 'attachments') uploads.push(value)
+        else { res.writeHead(400); res.end(); return }
+      }
+    } else form = new URLSearchParams(Buffer.concat(chunks).toString('utf8'))
     locale = form.get('lang') === 'en' ? 'en' : 'zh'
     const user = await runtime.user(headers)
     const isSms = url.pathname === '/account/sms/send' || url.pathname === '/account/sms/verify'
@@ -146,7 +178,7 @@ export async function handleAccount(
     if ((url.pathname === '/account/im/group' || url.pathname === '/account/im/message') && user) {
       if (!readIm) { res.writeHead(503); res.end(); return }
       try {
-        const data = await readIm(user, url, form)
+        const data = await readIm(user, url, form, uploads)
         res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }); res.end(JSON.stringify(data))
       } catch { res.writeHead(400); res.end() }
       return

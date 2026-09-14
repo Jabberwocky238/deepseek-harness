@@ -74,6 +74,12 @@
     },
     {
       "path": "../../credentials/credentials-local"
+    },
+    {
+      "path": "../../attachment/attachment"
+    },
+    {
+      "path": "../../attachment/attachment-local"
     }
   ],
   "exclude": [

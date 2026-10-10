@@ -124,8 +124,8 @@ export const Config: z<Config> = z.object({
 })
 
 const replies = {
-  zh: { attachmentFailed: '附件处理失败，请检查文件大小或重新发送。', processing: '正在处理中…', busy: '当前任务较多，请稍后重试。', failed: '任务未完成，请稍后重试。', timeout: '任务处理超时，已停止。', empty: '本次任务没有文本回复。', large: '消息过长，请缩短后重试。' },
-  en: { attachmentFailed: 'The attachment could not be processed. Check its size or send it again.', processing: 'Working…', busy: 'The bot is busy. Please try again later.', failed: 'The task did not complete. Please try again later.', timeout: 'The task timed out and was stopped.', empty: 'This task produced no text reply.', large: 'The message is too long. Please shorten it and try again.' },
+  zh: { attachmentFailed: '附件处理失败，请检查文件大小或重新发送。', processing: '正在处理中…', busy: '当前任务较多，请稍后重试。', failed: '任务未完成，请稍后重试。', timeout: '任务处理超时，已停止。', empty: '本次任务没有文本回复。', large: '消息过长，请缩短后重试。', done: '已发送。' },
+  en: { attachmentFailed: 'The attachment could not be processed. Check its size or send it again.', processing: 'Working…', busy: 'The bot is busy. Please try again later.', failed: 'The task did not complete. Please try again later.', timeout: 'The task timed out and was stopped.', empty: 'This task produced no text reply.', large: 'The message is too long. Please shorten it and try again.', done: 'Sent.' },
 }
 
 interface Conversation {
@@ -200,12 +200,16 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
    * chat per live Session. A Session the bot does not own finds no target, so a
    * tool cannot address a chat this process is not connected to.
    */
-  const sendTargets = new Map<string, { client: WSClient; chatid: string }>()
+  const sendTargets = new Map<string, { client: WSClient; chatid: string; delivered: boolean }>()
   ctx.provide('wecom', {
     send: async (sessionId: string, outbound: WecomOutbound): Promise<WecomDelivered> => {
       const target = sendTargets.get(sessionId)
       if (target === undefined) throw new Error('wecom: this Session is not an authenticated WeCom conversation')
-      return sendToChat(target.client, target.chatid, outbound)
+      const delivered = await sendToChat(target.client, target.chatid, outbound)
+      // A tool already put this turn's attachments in the chat, so the closing
+      // text has to follow them instead of completing the anchored reply.
+      if (delivered.files > 0) target.delivered = true
+      return delivered
     },
   })
   // SDK diagnostics can contain callback bodies; expose only fixed transport notices.
@@ -282,6 +286,7 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
           chatid: message.body.chattype === 'group'
             ? message.body.chatid ?? message.body.from.userid
             : message.body.from.userid,
+          delivered: false,
         })
       } catch (error: unknown) {
         await handle.dispose()
@@ -289,6 +294,9 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
       }
     }
     const { agent } = conversation.handle
+    // 本轮是否已用主动消息发过附件，决定收尾文字走流式还是主动消息。
+    const target = sendTargets.get(agent.session.id)
+    if (target !== undefined) target.delivered = false
     await agent.whenIdle()
     if (stopped()) return
     const outcome: { text: string; reason?: TurnEndReason; timedOut: boolean } = { text: '', timedOut: false }
@@ -337,7 +345,15 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
       stopStream()
     }
     await ctx.sessions.flush(agent.session)
-    await stream.finish(outcome.timedOut ? copy.timeout : outcome.reason?.kind === 'completed' ? outcome.text || copy.empty : copy.failed)
+    const closing = outcome.timedOut ? copy.timeout : outcome.reason?.kind === 'completed' ? outcome.text || copy.empty : copy.failed
+    if (target?.delivered === true && outcome.reason?.kind === 'completed' && outcome.text) {
+      // 附件已经是主动消息，排在流式回复之后；文字也发成主动消息，顺序才是
+      // 「文件 → 文字」。流式回复只留一句进度说明。
+      await stream.finish(copy.done)
+      await sendToChat(target.client, target.chatid, { text: closing })
+    } else {
+      await stream.finish(closing)
+    }
   }
   const receive = (frame: unknown): void => {
     const parsed = messageSchema.safeParse(frame)

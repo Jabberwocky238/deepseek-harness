@@ -6230,6 +6230,14 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export type PluginSpecInspection = {\n    readonly status: \'accepted\';\n    readonly kind: InstallSpecKind;\n    readonly name?: string;\n    readonly version?: string;\n    readonly description?: string;\n    readonly bundle: boolean | null;\n    readonly registry: Registry;\n    readonly host?: string;\n} | {\n    readonly status: \'refused\';\n    readonly problem: PluginInspectProblem;\n    readonly reason: string;\n    readonly registries?: Registry[];\n};',
   },
   {
+    name: 'PlaygroundContainer',
+    declaration: 'export interface PlaygroundContainer {\n    id: PlaygroundContainerId;\n    name: string;\n    image: string;\n    status: string;\n    sshPort: number;\n    username: string;\n    ssh: SshEndpoint | null;\n}',
+  },
+  {
+    name: 'PlaygroundContainerId',
+    declaration: 'export type PlaygroundContainerId = Branded<\'PlaygroundContainerId\'>;',
+  },
+  {
     name: 'PostToolDecision',
     declaration: 'export type PostToolDecision = {\n    kind: \'accept\';\n    content?: ContentBlock[];\n    value?: never;\n    additionalContexts?: UserMessage[];\n} | {\n    kind: \'accept\';\n    value: JsonValue;\n    content?: never;\n    additionalContexts?: UserMessage[];\n} | {\n    kind: \'block\';\n    feedback: ContentBlock[];\n    additionalContexts?: UserMessage[];\n};',
   },

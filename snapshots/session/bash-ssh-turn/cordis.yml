@@ -1,0 +1,9 @@
+- id: bash-sandbox
+  disabled: true
+
+- insert:
+    - id: snapshot-ssh
+      name: ../../../packages/shell/bash-ssh/tests/fixtures/snapshot.ts
+
+- id: permission
+  disabled: true

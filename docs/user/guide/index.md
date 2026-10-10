@@ -29,3 +29,4 @@ The agent can read and edit workspace files, run commands, delegate work, and ma
 - [Publish the Web UI behind a reverse proxy](./public-deployments.md)
 - [Use other CLI modes](../../../apps/cli/README.md)
 - [Develop a plugin](../develop/basic/index.md)
+- [Chat from WeCom](./wecom.md)

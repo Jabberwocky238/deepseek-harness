@@ -1,0 +1,655 @@
+/** Persistent directed messaging shared by human and AI channel adapters. */
+
+import type { Context } from '@deepseek-ai/cordis'
+import z from '@deepseek-ai/schemastery'
+import type { Domain } from '@deepseek-ai/dsh-storage-domain'
+import { randomUUID } from 'node:crypto'
+import { authorizationIdSchema, imDomain } from './model.ts'
+import type { AgentBinding, AgentPage, Authorization, AuthorizationId, Conversation, ConversationId, ImMessage, ImMessageId, MessageInput, Participant, ParticipantId } from './model.ts'
+
+export * from './model.ts'
+export { attachAgent } from './agent.ts'
+
+/** Cordis function-plugin name. */
+export const name = 'im'
+/** Durable domain storage must be mounted before accepting messages. */
+export const inject = ['storageDomain']
+
+/** Deployment limits on retained IM records and admitted text. */
+export interface Config {
+  /** Maximum number of participants retained by this service. */
+  maxParticipants: number
+  /** Maximum number of conversations retained by this service. */
+  maxConversations: number
+  /** Maximum number of messages retained across conversations. */
+  maxMessages: number
+  /** Maximum UTF-8 bytes in one text message. */
+  maxTextBytes: number
+  /** Maximum attachment bytes per message, before storing or reading a file. */
+  maxAttachmentBytes: number
+  /** Maximum attachment count per message. */
+  maxAttachments: number
+}
+
+/** Explicit deployment limits; reaching a limit rejects new records without deleting history. */
+export const Config: z<Config> = z.object({
+  maxParticipants: z.number().step(1).min(2).required(),
+  maxConversations: z.number().step(1).min(1).required(),
+  maxMessages: z.number().step(1).min(1).required(),
+  maxTextBytes: z.number().step(1).min(1).required(),
+  maxAttachmentBytes: z.number().step(1).min(1).required(),
+  maxAttachments: z.number().step(1).min(1).required(),
+})
+
+/** A channel accepts a committed message; acceptance is not a human read receipt. */
+export type MessageReceiver = (message: ImMessage, signal: AbortSignal) => Promise<void | 'queued'>
+
+interface Receiver {
+  receive: MessageReceiver
+  lifetime: AbortController
+  tail: Promise<void>
+  scheduled: Set<ImMessageId>
+}
+
+declare module '@deepseek-ai/cordis' {
+  interface Context {
+    im: ImService
+  }
+}
+
+/** Trusted host API; adapters authenticate identities before calling it. */
+export class ImService {
+  private tail = Promise.resolve()
+  private readonly receivers = new Map<string, Receiver>()
+  private closed = false
+
+  constructor(
+    private readonly domain: Domain<typeof imDomain>, private readonly config: Config, private readonly reportFailure: () => void,
+  ) {}
+
+  /**
+   * Admit an identity, or return its identical existing record. Changes reject.
+   * @param participant - authenticated person or composition-owned AI.
+   * @returns after durable registration.
+   */
+  addParticipant(participant: Participant): Promise<void> {
+    return this.mutate(async () => {
+      const table = this.domain.table('participants')
+      const prior = table.get(participant.id)
+      if (prior !== undefined) {
+        if (prior.kind !== participant.kind || prior.name !== participant.name || prior.namespace !== participant.namespace) throw new Error('IM participant identity conflict')
+        return
+      }
+      if (table.size >= this.config.maxParticipants) throw new Error('IM participant limit reached')
+      await table.put(participant.id, structuredClone(participant))
+    })
+  }
+
+  /**
+   * Create a conversation with explicit existing members; repeated identical creation is idempotent.
+   * @param conversation - fixed membership shared by people and AIs.
+   * @returns after durable creation; rejects unknown or duplicate members.
+   */
+  addConversation(conversation: Conversation): Promise<void> {
+    return this.mutate(async () => {
+      if (conversation.members.length < 2 || new Set(conversation.members).size !== conversation.members.length) {
+        throw new Error('IM conversation requires distinct members')
+      }
+      for (const member of conversation.members) {
+        if (this.participant(member).namespace !== conversation.namespace) throw new Error('IM conversation cannot cross platform namespaces')
+      }
+      if (this.participant(conversation.owner).kind !== 'human' || this.participant(conversation.owner).namespace !== conversation.namespace
+        || (conversation.kind === 'group' && !conversation.members.includes(conversation.owner))) throw new Error('IM conversation requires a same-platform human owner; group owners must be members')
+      if (conversation.kind === 'direct' && conversation.members.length !== 2) throw new Error('IM direct conversation requires exactly two members')
+      const table = this.domain.table('conversations')
+      const prior = table.get(conversation.id)
+      if (prior !== undefined) {
+        if (JSON.stringify(prior) !== JSON.stringify(conversation)) throw new Error('IM conversation membership conflict')
+        return
+      }
+      if (table.size >= this.config.maxConversations) throw new Error('IM conversation limit reached')
+      await table.put(conversation.id, structuredClone(conversation))
+    })
+  }
+
+  /**
+   * Set the AI reply budget without changing conversation membership or history.
+   * @param id - existing conversation.
+   * @param owner - authenticated conversation owner.
+   * @param limit - nonnegative total AI message limit.
+   * @returns after the updated budget is durable.
+   */
+  setAiMessageLimit(id: ConversationId, owner: ParticipantId, limit: number): Promise<void> {
+    return this.mutate(async () => {
+      if (!Number.isSafeInteger(limit) || limit < 0) throw new Error('Invalid IM AI message limit')
+      const table = this.domain.table('conversations')
+      const room = table.get(id)
+      if (room === undefined || room.owner !== owner) throw new Error('IM conversation owner required')
+      if (room.maxAiMessages !== limit) await table.put(id, { ...room, maxAiMessages: limit })
+    })
+  }
+
+  /**
+   * Commit one directed message before scheduling recipient acceptance. AI recipients are explicit.
+   * @param input - authenticated sender, same-conversation recipients, and delivery mode.
+   * @returns the durable message; duplicate ids require identical content and routing.
+   */
+  async send(input: MessageInput): Promise<ImMessage> {
+    const message = await this.mutate(async () => {
+      this.requireMember(input.conversation, input.sender)
+      const target = this.domain.table('conversations').get(input.conversation)
+      if (target?.kind === 'group') input = { ...input, recipients: target.members.filter(member => member !== input.sender) }
+      if (input.recipients.length === 0 || new Set(input.recipients).size !== input.recipients.length) throw new Error('IM recipients must be distinct and nonempty')
+      for (const recipient of input.recipients) {
+        this.requireMember(input.conversation, recipient)
+        if (recipient === input.sender) throw new Error('IM messages cannot target their sender')
+      }
+      if ((input.text.trim() === '' && input.attachments.length === 0) || Buffer.byteLength(input.text) > this.config.maxTextBytes) throw new Error('IM message is empty or text exceeds the byte limit')
+      if (input.attachments.length > this.config.maxAttachments
+        || input.attachments.reduce((total, item) => total + item.attachment.bytes, 0) > this.config.maxAttachmentBytes) throw new Error('IM attachments exceed the configured limit')
+      const table = this.domain.table('messages')
+      const prior = table.get(input.id)
+      if (prior !== undefined) {
+        if (prior.conversation !== input.conversation || prior.sender !== input.sender || prior.text !== input.text
+          || prior.mode !== input.mode || JSON.stringify(prior.recipients) !== JSON.stringify(input.recipients)
+          || JSON.stringify(prior.attachments) !== JSON.stringify(input.attachments)) throw new Error('IM message id conflict')
+        return prior
+      }
+      if (table.size >= this.config.maxMessages) throw new Error('IM message limit reached')
+      const conversation = this.domain.table('conversations').get(input.conversation)
+      if (conversation === undefined) throw new Error('IM conversation is missing')
+      if (conversation.kind === 'direct' && input.recipients.some(recipient =>
+        !this.contacts(input.sender).some(contact => contact.id === recipient))) throw new Error('IM direct messaging requires a contact')
+      if (this.participant(input.sender).kind === 'ai') {
+        const used = [...table.entries()].filter(([, row]) => row.conversation === input.conversation
+          && this.participant(row.sender).kind === 'ai').length
+        if (used >= conversation.maxAiMessages) throw new Error('IM conversation AI message budget exhausted')
+      }
+      let sequence = 1
+      let activityOrder = 1
+      for (const [, row] of table.entries()) {
+        if (row.conversation === input.conversation) sequence = Math.max(sequence, row.sequence + 1)
+        activityOrder = Math.max(activityOrder, row.activityOrder + 1)
+      }
+      const created: ImMessage = {
+        ...structuredClone(input), sequence, activityOrder,
+        deliveries: Object.fromEntries(input.recipients.map(id => [id, 'pending' as const])),
+      }
+      await table.put(created.id, created)
+      return created
+    })
+    for (const recipient of message.recipients) this.schedule(message, recipient)
+    return structuredClone(message)
+  }
+
+  /**
+   * Read latest durable activity for conversations joined by this member in one namespace.
+   * @param member - identity whose group membership authorizes these activity records.
+   * @param namespace - application namespace restricting the conversation set.
+   * @returns a detached map of conversation IDs to commit order; zero denotes no known activity.
+   */
+  conversationActivity(member: ParticipantId, namespace: string): ReadonlyMap<ConversationId, number> {
+    const result = new Map(this.conversations(member, namespace)
+      .filter(room => room.members.includes(member)).map(room => [room.id, 0]))
+    for (const [, message] of this.domain.table('messages').entries()) {
+      const order = result.get(message.conversation)
+      if (order !== undefined) result.set(message.conversation, Math.max(order, message.activityOrder))
+    }
+    return result
+  }
+
+  /**
+   * Read ordered chat history visible to a member, including messages addressed to other members.
+   * @param conversation - conversation to read.
+   * @param member - authenticated member requesting history.
+   * @param after - exclusive sequence cursor; zero starts at the beginning.
+   * @returns immutable-by-ownership copies in conversation order.
+   */
+  history(conversation: ConversationId, member: ParticipantId, after: number): ImMessage[] {
+    if (this.domain.table('conversations').get(conversation)?.owner !== member) this.requireMember(conversation, member)
+    return [...this.domain.table('messages').entries()].map(([, message]) => message)
+      .filter(message => message.conversation === conversation && message.sequence > after)
+      .sort((a, b) => a.sequence - b.sequence).map(message => structuredClone(message))
+  }
+
+  /**
+   * Read an admitted identity for channel presentation and Agent admission.
+   * @param id - participant identity.
+   * @returns an owned copy; rejects an unknown identity.
+   */
+  participant(id: ParticipantId): Participant {
+    const participant = this.domain.table('participants').get(id)
+    if (participant === undefined) throw new Error('IM participant not found')
+    return structuredClone(participant)
+  }
+
+  /**
+   * List a member's conversations within exactly one platform namespace.
+   * @param member - externally authenticated participant.
+   * @param namespace - native IM or an adapter-owned platform namespace.
+   * @returns owned conversation copies; platform groups remain separate.
+   */
+  conversations(member: ParticipantId, namespace: string): Conversation[] {
+    if (this.participant(member).namespace !== namespace) throw new Error('IM participant belongs to another namespace')
+    return [...this.domain.table('conversations').entries()].map(([, value]) => value)
+      .filter(value => value.namespace === namespace && (value.members.includes(member) || value.owner === member))
+      .map(value => structuredClone(value))
+  }
+
+  /**
+   * Add a mutual same-platform contact, granting communication in both directions.
+   * @param human - externally authenticated same-platform administrator.
+   * @param ownerId - human or AI contact-list owner.
+   * @param contact - existing human or AI identity.
+   * @returns after durable insertion; repeats are idempotent.
+   */
+  addContact(human: ParticipantId, ownerId: ParticipantId, contact: ParticipantId): Promise<void> {
+    return this.mutate(async () => {
+      this.validateAuthorization(human, {
+        id: authorizationIdSchema.parse(randomUUID()), from: ownerId, to: contact,
+      })
+      await addMutualContact(this.domain, ownerId, contact)
+    })
+  }
+
+  /**
+   * Remove a mutual contact and revoke communication in both directions without removing conversation membership.
+   * @param human - externally authenticated same-platform administrator.
+   * @param ownerId - human or AI contact-list owner.
+   * @param contact - identity to remove.
+   * @returns after durable removal; absent contacts are ignored.
+   */
+  removeContact(human: ParticipantId, ownerId: ParticipantId, contact: ParticipantId): Promise<void> {
+    return this.mutate(async () => {
+      const relation = this.findRelationship(ownerId, contact)
+      if (relation === undefined) return
+      this.validateAuthorization(human, relation)
+      const table = this.domain.table('authorizations')
+      await table.delete(relation.id)
+    })
+  }
+
+  /**
+   * Read a human or AI participant's private contact list.
+   * @param owner - list owner selected by the authenticated caller or bound Agent.
+   * @returns owned participant copies; contacts do not imply group membership.
+   */
+  contacts(owner: ParticipantId): Participant[] {
+    this.participant(owner)
+    return [...this.domain.table('authorizations').entries()].flatMap(([, relation]) => {
+      if (relation.from === owner) return [this.participant(relation.to)]
+      if (relation.to === owner) return [this.participant(relation.from)]
+      return []
+    })
+  }
+
+  /**
+   * Rename an owned group.
+   * @param human - externally authenticated group owner.
+   * @param id - existing group identity.
+   * @param name - nonempty displayed group name.
+   * @returns after durable replacement.
+   */
+  renameGroup(human: ParticipantId, id: ConversationId, name: string): Promise<void> {
+    return this.mutate(async () => {
+      this.requireGroupOwner(id, human)
+      if (name.trim() === '') throw new Error('IM group name must not be empty')
+      await this.domain.table('conversations').update(id, current => ({ ...current, name }))
+    })
+  }
+
+  /**
+   * Add one existing same-platform participant to an owned group.
+   * @param human - externally authenticated group owner.
+   * @param id - group identity.
+   * @param member - human or AI identity; AI permissions remain independent.
+   * @returns after durable membership update; existing membership is unchanged.
+   */
+  addGroupMember(human: ParticipantId, id: ConversationId, member: ParticipantId): Promise<void> {
+    return this.mutate(async () => {
+      const group = this.requireGroupOwner(id, human)
+      if (this.participant(member).namespace !== group.namespace) throw new Error('IM group cannot cross platform namespaces')
+      if (!group.members.includes(member)) await this.domain.table('conversations').put(id, { ...group, members: [...group.members, member] })
+    })
+  }
+
+  /**
+   * Remove a member or let a member leave; the owner must remain and groups retain at least two members.
+   * @param actor - externally authenticated owner, or the leaving member.
+   * @param id - group identity.
+   * @param member - member to remove.
+   * @returns after durable removal; future history, sends, and queued channel admission reject membership loss.
+   */
+  removeGroupMember(actor: ParticipantId, id: ConversationId, member: ParticipantId): Promise<void> {
+    return this.mutate(async () => {
+      this.requireMember(id, actor)
+      const group = this.domain.table('conversations').get(id)
+      if (group === undefined) throw new Error('IM conversation is missing')
+      if (group.kind !== 'group' || (actor !== member && actor !== group.owner)) throw new Error('IM group owner required')
+      if (member === group.owner || group.members.length <= 2) throw new Error('IM group must retain its owner and two members')
+      await this.domain.table('conversations').put(id, { ...group, members: group.members.filter(value => value !== member) })
+    })
+  }
+
+  /**
+   * Create a contact relationship. Only externally authenticated humans can administer it.
+   * @param human - human identity authenticated by the external caller.
+   * @param authorization - the two participants in a mutual contact relationship.
+   * @returns after durable creation; duplicate authorization ids reject.
+   */
+  grantAuthorization(human: ParticipantId, authorization: Authorization): Promise<void> {
+    return this.mutate(async () => {
+      this.validateAuthorization(human, authorization)
+      const table = this.domain.table('authorizations')
+      if (table.get(authorization.id) !== undefined || this.findRelationship(authorization.from, authorization.to) !== undefined) {
+        throw new Error('IM contact relationship already exists')
+      }
+      await table.put(authorization.id, structuredClone(authorization))
+    })
+  }
+
+  /**
+   * Replace the endpoints of a mutual contact relationship.
+   * @param human - externally authenticated human member.
+   * @param id - existing authorization identity.
+   * @param changes - both new contact endpoints.
+   * @returns after durable replacement; subsequent sends use the replacement.
+   */
+  updateAuthorization(human: ParticipantId, id: AuthorizationId, changes: Pick<Authorization, 'from' | 'to'>): Promise<void> {
+    return this.mutate(async () => {
+      const table = this.domain.table('authorizations')
+      const prior = table.get(id)
+      if (prior === undefined) throw new Error('IM authorization not found')
+      const updated = { ...prior, ...structuredClone(changes) }
+      this.validateAuthorization(human, prior)
+      this.validateAuthorization(human, updated)
+      const existing = this.findRelationship(updated.from, updated.to)
+      if (existing !== undefined && existing.id !== id) throw new Error('IM contact relationship already exists')
+      await table.put(id, updated)
+    })
+  }
+
+  /**
+   * Remove one permission without retracting messages already committed under it.
+   * @param human - externally authenticated human member.
+   * @param id - existing authorization identity.
+   * @returns after durable removal; both endpoints lose this contact relationship.
+   */
+  revokeAuthorization(human: ParticipantId, id: AuthorizationId): Promise<void> {
+    return this.mutate(async () => {
+      const table = this.domain.table('authorizations')
+      const prior = table.get(id)
+      if (prior === undefined) throw new Error('IM authorization not found')
+      this.validateAuthorization(human, prior)
+      await table.delete(id)
+    })
+  }
+
+  /**
+   * Register one conversation recipient and resume its pending deliveries. Own this registration with ctx.effect().
+   * @param conversation - conversation whose messages the adapter accepts.
+   * @param recipient - authenticated member served by the adapter.
+   * @param receive - resolves on acceptance, not on AI completion or human reading.
+   * @returns an async disposer that stops admission and drains outstanding acceptance.
+   */
+  register(conversation: ConversationId, recipient: ParticipantId, receive: MessageReceiver): () => Promise<void> {
+    this.requireMember(conversation, recipient)
+    if (this.closed) throw new Error('IM service is closed')
+    const key = JSON.stringify([conversation, recipient])
+    if (this.receivers.has(key)) throw new Error('IM recipient already registered')
+    const receiver: Receiver = { receive, lifetime: new AbortController(), tail: Promise.resolve(), scheduled: new Set() }
+    this.receivers.set(key, receiver)
+    for (const message of this.history(conversation, recipient, 0)) this.schedule(message, recipient)
+    return async () => {
+      this.receivers.delete(key)
+      receiver.lifetime.abort()
+      await receiver.tail
+    }
+  }
+
+  /**
+   * Register an AI across its joined conversations, including groups joined after registration.
+   * @param recipient - bound AI identity.
+   * @param receive - inbox admission callback.
+   * @returns a disposer that drains pending admissions.
+   */
+  registerParticipant(recipient: ParticipantId, receive: MessageReceiver): () => Promise<void> {
+    if (this.participant(recipient).kind !== 'ai') throw new Error('IM participant receiver requires an AI')
+    if (this.closed) throw new Error('IM service is closed')
+    const key = JSON.stringify([recipient])
+    if (this.receivers.has(key)) throw new Error('IM participant already registered')
+    const receiver: Receiver = { receive, lifetime: new AbortController(), tail: Promise.resolve(), scheduled: new Set() }
+    this.receivers.set(key, receiver)
+    for (const message of this.inbox(recipient)) this.schedule(message, recipient)
+    return async () => {
+      if (this.receivers.get(key) === receiver) this.receivers.delete(key)
+      receiver.lifetime.abort()
+      await receiver.tail
+    }
+  }
+
+  /**
+   * Read the AI's persisted page selection; new identities start with no open page.
+   * @param participant - AI whose page is selected by the authenticated binding.
+   * @returns an owned page value.
+   */
+  agentPage(participant: ParticipantId): AgentPage {
+    if (this.participant(participant).kind !== 'ai') throw new Error('IM page requires an AI')
+    return structuredClone(this.domain.table('pages').get(participant) ?? { kind: 'none' })
+  }
+
+  /**
+   * Select or leave an AI page; only unread messages on the selected page are admitted as content.
+   * @param participant - bound AI identity.
+   * @param page - joined group, mutual contact, or no page.
+   * @returns after durable selection and scheduling of pending page messages.
+   */
+  async setAgentPage(participant: ParticipantId, page: AgentPage): Promise<void> {
+    await this.mutate(async () => {
+      this.agentPage(participant)
+      if (page.kind === 'group') {
+        this.requireMember(page.id, participant)
+        if (this.domain.table('conversations').get(page.id)?.kind !== 'group') throw new Error('IM group page required')
+      } else if (page.kind === 'contact' && !this.contacts(participant).some(contact => contact.id === page.id)) {
+        throw new Error('IM contact page requires a mutual contact')
+      }
+      await this.domain.table('pages').put(participant, structuredClone(page))
+    })
+    await this.receivers.get(JSON.stringify([participant]))?.tail
+    for (const message of this.inbox(participant)) this.schedule(message, participant)
+  }
+
+  /**
+   * Retry a failed delivery without recreating the chat message; channels must deduplicate ambiguous acknowledgements.
+   * @param id - committed message to retry.
+   * @param recipient - target member whose acceptance failed.
+   * @returns after durable requeue, before channel acceptance.
+   */
+  async retry(id: ImMessageId, recipient: ParticipantId): Promise<void> {
+    const message = await this.mutate(async () => this.domain.table('messages').update(id, (current) => {
+      if (current.deliveries[recipient] !== 'failed') throw new Error('IM delivery is not failed')
+      return { ...current, deliveries: { ...current.deliveries, [recipient]: 'pending' } }
+    }))
+    this.schedule(message, recipient)
+  }
+
+  /**
+   * Stop all recipient delivery and drain storage before releasing the domain.
+   * @returns after receiver callbacks and durable writes settle.
+   */
+  async close(): Promise<void> {
+    this.closed = true
+    const receivers = [...this.receivers.values()]
+    this.receivers.clear()
+    for (const receiver of receivers) receiver.lifetime.abort()
+    await Promise.all(receivers.map(receiver => receiver.tail))
+    await this.tail
+    await this.domain.close()
+  }
+
+  private requireMember(conversation: ConversationId, member: ParticipantId): void {
+    if (!this.domain.table('conversations').get(conversation)?.members.includes(member)) throw new Error('IM conversation membership required')
+  }
+
+  private validateAuthorization(human: ParticipantId, authorization: Authorization): void {
+    if (this.participant(human).kind !== 'human') throw new Error('IM authorization requires an external human')
+    const from = this.participant(authorization.from)
+    const to = this.participant(authorization.to)
+    if (from.namespace !== to.namespace || this.participant(human).namespace !== from.namespace) {
+      throw new Error('IM contact administrator and endpoints must share a namespace')
+    }
+    if (authorization.from === authorization.to) throw new Error('IM authorization endpoints must differ')
+  }
+
+  /**
+   * Read a recipient's durable inbox, including offline and failed deliveries.
+   * @param recipient - externally authenticated human or AI identity.
+   * @returns unaccepted messages in per-conversation sequence order.
+   */
+  inbox(recipient: ParticipantId): ImMessage[] {
+    const rooms = this.conversations(recipient, this.participant(recipient).namespace)
+    return rooms.flatMap(room => this.history(room.id, recipient, 0))
+      .filter(message => message.recipients.includes(recipient) && message.deliveries[recipient] !== 'accepted')
+  }
+
+  /**
+   * Resolve the attachment budget before a channel reads or uploads bytes.
+   * @returns the deployment's per-message byte and count limits.
+   */
+  attachmentLimits(): { maxBytes: number; maxCount: number } {
+    return { maxBytes: this.config.maxAttachmentBytes, maxCount: this.config.maxAttachments }
+  }
+
+  /**
+   * List the persisted Agent associations for runtime recovery.
+   * @returns owned bindings, including explicitly offline AIs.
+   */
+  agentBindings(): AgentBinding[] {
+    return [...this.domain.table('bindings').entries()].map(([, binding]) => structuredClone(binding))
+  }
+
+  /**
+   * Persist an Agent association before admission; only the owning runtime calls this method.
+   * @param binding - dedicated Session identity and desired online state.
+   * @returns after durable replacement; an established Session identity cannot change.
+   */
+  setAgentBinding(binding: AgentBinding): Promise<void> {
+    return this.mutate(async () => {
+      if (this.participant(binding.participant).kind !== 'ai') throw new Error('IM binding requires an AI')
+      const table = this.domain.table('bindings')
+      const key = JSON.stringify([binding.participant])
+      const prior = table.get(key)
+      if (prior !== undefined && prior.sessionId !== binding.sessionId) throw new Error('IM Agent Session identity cannot change')
+      await table.put(key, structuredClone(binding))
+    })
+  }
+
+  /**
+   * Acknowledge a message after an AI commits it as model input, or a human adapter accepts it.
+   * @param id - message identity.
+   * @param recipient - receiving identity.
+   * @returns after the inbox receipt is durable.
+   */
+  acceptMessage(id: ImMessageId, recipient: ParticipantId): Promise<void> {
+    return this.mutate(async () => {
+      await this.domain.table('messages').update(id, (current) => {
+        if (!current.recipients.includes(recipient)) throw new Error('IM recipient not found on message')
+        return { ...current, deliveries: { ...current.deliveries, [recipient]: 'accepted' } }
+      })
+    })
+  }
+
+  private findRelationship(from: ParticipantId, to: ParticipantId): Authorization | undefined {
+    return [...this.domain.table('authorizations').entries()].find(([, relation]) =>
+      (relation.from === from && relation.to === to) || (relation.from === to && relation.to === from))?.[1]
+  }
+
+  private requireGroupOwner(id: ConversationId, human: ParticipantId): Conversation {
+    this.requireMember(id, human)
+    const group = this.domain.table('conversations').get(id)
+    if (group === undefined) throw new Error('IM conversation is missing')
+    if (group.kind !== 'group' || group.owner !== human) throw new Error('IM group owner required')
+    return group
+  }
+
+  private mutate<T>(operation: () => Promise<T>): Promise<T> {
+    if (this.closed) return Promise.reject(new Error('IM service is closed'))
+    const job = this.tail.then(operation)
+    this.tail = job.then(() => {}, () => {})
+    return job
+  }
+
+  private schedule(message: ImMessage, recipient: ParticipantId): void {
+    if (this.closed || !['pending', 'queued'].includes(message.deliveries[recipient] ?? '')) return
+    const receiver = this.receivers.get(JSON.stringify([message.conversation, recipient]))
+      ?? this.receivers.get(JSON.stringify([recipient]))
+    if (receiver === undefined || receiver.scheduled.has(message.id)) return
+    receiver.scheduled.add(message.id)
+    receiver.tail = receiver.tail.then(async () => {
+      if (receiver.lifetime.signal.aborted) return
+      let status: 'accepted' | 'queued' | 'failed' = 'accepted'
+      try {
+        this.requireMember(message.conversation, recipient)
+        status = await receiver.receive(structuredClone(message), receiver.lifetime.signal) ?? 'accepted'
+      } catch {
+        // Channel acceptance failures remain durable and are retried explicitly.
+        status = 'failed'
+      }
+      await this.domain.table('messages').update(message.id, current => ({
+        ...current, deliveries: { ...current.deliveries, [recipient]: current.deliveries[recipient] === 'accepted' ? 'accepted' : status },
+      }))
+    }).catch(() => {
+      // A failed durable acknowledgement leaves the delivery pending for recovery.
+      this.reportFailure()
+    }).finally(() => { receiver.scheduled.delete(message.id) })
+  }
+}
+
+/**
+ * Mount the persistent IM service.
+ * @param ctx - context carrying domain storage.
+ * @param config - explicit deployment limits.
+ * @returns after durable records load and the service becomes available.
+ */
+export async function apply(ctx: Context, config: Config): Promise<void> {
+  const domain = await ctx.storageDomain.open(imDomain)
+  const service = new ImService(domain, config, () => { ctx.logger.warn('IM delivery acknowledgement could not be persisted') })
+  ctx.effect(() => () => service.close())
+  await restoreContactRelationships(domain)
+  ctx.provide('im', service)
+}
+
+
+async function addMutualContact(domain: Domain<typeof imDomain>, from: ParticipantId, to: ParticipantId): Promise<void> {
+  const table = domain.table('authorizations')
+  const relation = [...table.entries()].find(([, value]) =>
+    (value.from === from && value.to === to) || (value.from === to && value.to === from))?.[1]
+  if (relation === undefined) {
+    const id = authorizationIdSchema.parse(randomUUID())
+    await table.put(id, { id, from, to })
+  }
+}
+
+/** Fold draft contact lists and overlapping conversation grants into one relationship per pair before admission. */
+async function restoreContactRelationships(domain: Domain<typeof imDomain>): Promise<void> {
+  const table = domain.table('authorizations')
+  const pairs = new Map<string, Authorization>()
+  for (const [id, relation] of table.entries()) {
+    const key = JSON.stringify([relation.from, relation.to].sort())
+    const prior = pairs.get(key)
+    if (prior === undefined) { pairs.set(key, relation); continue }
+    await table.delete(id)
+  }
+  const bindings = domain.table('bindings')
+  for (const [key, binding] of bindings.entries()) {
+    const identityKey = JSON.stringify([binding.participant])
+    if (key === identityKey) continue
+    if (bindings.get(identityKey) === undefined) await bindings.put(identityKey, binding)
+    await bindings.delete(key)
+  }
+  const legacy = domain.table('contacts')
+  for (const [owner, record] of legacy.entries()) {
+    for (const contact of record.contacts) await addMutualContact(domain, owner, contact)
+    await legacy.delete(owner)
+  }
+}

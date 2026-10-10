@@ -53,6 +53,9 @@ allowBuilds:
   electron-winstaller: false
   # Store-index rewriting only needs msgpackr's portable JavaScript codec.
   msgpackr-extract: false
+  # SSH uses the JavaScript implementation; native acceleration is optional.
+  cpu-features: false
+  ssh2: false
 
 minimumReleaseAgeExclude:
   # Office engines and their API are qualified and released together by the kit repository.

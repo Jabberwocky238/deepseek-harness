@@ -1,0 +1,8 @@
+version: 1
+scenario: wecom-text
+profile: sdk
+composition: sdk-wecom-text
+recording: authored
+header:
+  class: wecom-text
+  pin: true

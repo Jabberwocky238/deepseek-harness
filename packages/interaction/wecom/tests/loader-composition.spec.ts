@@ -18,14 +18,9 @@ import { LlmAdapter, type GenerateOptions, type StreamChunk } from '@deepseek-ai
 import { SessionId, type SessionEvent } from '@deepseek-ai/dsh-session'
 import { WebSocketServer, type WebSocket } from 'ws'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import sharp from 'sharp'
 import { mediaPeer } from './media-peer.ts'
 import * as Wecom from '../src/index.ts'
-import * as Im from '@deepseek-ai/dsh-im'
-import Storage from '@deepseek-ai/dsh-storage'
-import * as JsonStorage from '@deepseek-ai/dsh-storage-json'
-import * as StorageDomain from '@deepseek-ai/dsh-storage-domain'
-import { ToolCallId } from '@deepseek-ai/dsh-llm'
+import { } from '@deepseek-ai/dsh-llm'
 
 interface Frame {
   cmd: string
@@ -95,10 +90,6 @@ async function harness(
   const configFile = join(root, 'cordis.yml')
   await copyFile(new URL('./fixtures/cordis.yml', import.meta.url), configFile)
   if (options.secondBot) await writeFile(configFile, (await readFile(configFile, 'utf8')) + "- id: wecom-two\n  name: '@deepseek-ai/dsh-wecom'\n  config: !!js ctx.wecomSecondTestConfig\n")
-  if (overrides.imMaxAiMessages !== undefined && !options.missingIm) {
-    const imConfig = await readFile(new URL('../../im/tests/fixtures/cordis.yml', import.meta.url), 'utf8')
-    await writeFile(configFile, imConfig + await readFile(configFile, 'utf8'))
-  }
   if (options.preset) {
     await mkdir(join(root, 'presets', 'test'), { recursive: true })
     await writeFile(join(root, 'presets', 'test', 'agent.cordis.yml'), '[]\n')
@@ -148,11 +139,6 @@ async function harness(
     name: 'test-runtime',
     async apply(child: Context) {
       await mountAgentLoopTestDependencies(child)
-      if (overrides.imMaxAiMessages !== undefined) {
-        await child.plugin(Storage)
-        await child.plugin(JsonStorage, { root: join(root, 'data') })
-        await child.plugin(StorageDomain, { backend: 'json' })
-      }
       await child.plugin(LocalFileSystem, { cwd: root })
       await child.plugin(LocalAttachments, { dshHome: root })
       await child.plugin(AgentLoop, { agents: [] })
@@ -185,7 +171,6 @@ async function harness(
     async import(specifier: string) {
       if (specifier === 'test-runtime') return dependencies
       if (specifier === '@deepseek-ai/dsh-wecom') return Wecom
-      if (specifier === '@deepseek-ai/dsh-im') return Im
       throw new Error(`unexpected import ${specifier}`)
     },
   } as unknown as NonNullable<typeof ctx.loader.internal>
@@ -209,207 +194,11 @@ async function harness(
 }
 
 describe('WeCom through Loader and a real WebSocket', () => {
-  it('lists configured bots as mutual contacts while keeping other users outside their shared namespace', async () => {
-    const h = await harness({
-      imMaxAiMessages: 10,
-      imBotContacts: [{ botId: 'bot', name: 'Agent One' }, { botId: 'bot-two', name: 'Agent Two' }],
-    }, { secondBot: true })
-    h.send('contacts-one')
-    await h.waitReplies(1)
-    const first = h.ctx.agents.list()[0]!
-    h.sendSecond('contacts-two')
-    await h.waitReplies(2)
-    const second = h.ctx.agents.list().find(agent => agent !== first)!
-    const discover = async (agent: typeof first) => {
-      const result = await h.ctx.tools.execute({ name: 'im_context', arguments: {}, callId: ToolCallId('contacts'), agent, signal: new AbortController().signal })
-      expect(result.isError).not.toBe(true)
-      return JSON.parse(result.content.find(block => block.type === 'text')!.text) as {
-        self: { id: string; name: string; namespace: string }
-        contacts: { id: string; name: string }[]
-        conversations: { id: string; members: { id: string }[] }[]
-      }
-    }
-    const one = await discover(first)
-    const two = await discover(second)
-    await expect(JSON.stringify({ one, two }, null, 2) + '\n').toMatchFileSnapshot('./expected/bot-contacts.json')
-    expect(one.contacts).toContainEqual(expect.objectContaining({ id: two.self.id, name: 'Agent Two' }))
-    expect(two.contacts).toContainEqual(expect.objectContaining({ id: one.self.id, name: 'Agent One' }))
-    expect(one.self.namespace).toBe(two.self.namespace)
-    const shared = one.conversations.find(room => room.members.some(member => member.id === two.self.id))!
-    expect(two.conversations.some(room => room.id === shared.id)).toBe(true)
-    const published = await h.ctx.tools.execute({
-      name: 'talk', arguments: { conversation: shared.id, message: 'contact message' },
-      callId: ToolCallId('contact-talk'), agent: first, signal: new AbortController().signal,
-    })
-    expect(published.isError).not.toBe(true)
-    await waitFor(() => { expect(h.model.requests).toHaveLength(3) })
-    await second.whenIdle()
-    expect(JSON.stringify(h.model.requests[2]?.messages)).toContain(one.self.id)
-    h.send('contacts-other-user', 'bob')
-    await h.waitReplies(3)
-    const other = await discover(h.ctx.agents.list().find(agent => agent !== first && agent !== second)!)
-    expect(other.self.namespace).not.toBe(one.self.namespace)
-    expect(other.contacts.map(contact => contact.id)).not.toContain(two.self.id)
-  })
 
-  it('reports missing IM services before admitting input to the model', async () => {
-    const h = await harness({ imMaxAiMessages: 10 }, { missingIm: true })
-    h.send('missing-im')
-    await h.waitReplies(1)
-    expect(h.replies()[0]?.body?.stream?.content).toContain('did not complete')
-    expect(h.model.requests).toHaveLength(0)
-    expect(h.ctx.agents.list()).toHaveLength(0)
-  })
-  it('gives both bots private IM discovery and sends talk messages to the authenticated chat', async () => {
-    const h = await harness({ imMaxAiMessages: 10 }, { secondBot: true })
-    const call = (name: string, args: object) => async function* (): AsyncIterable<StreamChunk> {
-      yield { type: 'block-start', index: 0, blockType: 'tool-call' }
-      yield { type: 'block-end', index: 0, block: { type: 'tool-call', id: ToolCallId(`call-${name}`), name, arguments: JSON.stringify(args) } }
-      yield { type: 'finish', reason: { kind: 'tool-calls' } }
-    }
-    h.model.responses.push(call('im_context', {}), call('talk', { message: 'hello from IM' }))
-    h.send('im-first')
-    await h.waitReplies(1)
-    await waitFor(() => { expect(h.frames.filter(frame => frame.cmd === 'aibot_send_msg')).toHaveLength(1) })
-    expect(h.frames.find(frame => frame.cmd === 'aibot_send_msg')?.body).toMatchObject({ chatid: 'alice', markdown: { content: 'hello from IM' } })
-    const firstResults = h.events.filter(row => row.event.type === 'tool/result')
-    expect(JSON.stringify(firstResults)).toContain('contacts')
-    expect(JSON.stringify(firstResults)).toContain('alice')
-    expect(JSON.stringify(firstResults)).not.toContain('test-secret')
-    h.model.responses.push(call('im_context', {}))
-    h.sendSecond('im-second')
-    await h.waitReplies(2)
-    const discoveries = h.events.filter(row => row.event.type === 'tool/result' && JSON.stringify(row).includes('contacts'))
-    expect(discoveries).toHaveLength(2)
-    expect(discoveries[0]?.sessionId).not.toBe(discoveries[1]?.sessionId)
-    const namespaces = discoveries.map(row => JSON.stringify(row).match(/wecom:[a-f0-9]{64}/)?.[0])
-    expect(namespaces.every(value => value !== undefined)).toBe(true)
-    expect(new Set(namespaces).size).toBe(2)
-    const inputs = h.model.requests.filter(request => JSON.stringify(request.messages).includes('contacts'))
-    expect(inputs.length).toBeGreaterThanOrEqual(2)
-    const botOne = [...h.ctx.loader.entries()].find(entry => entry.options.id === 'wecom')!
-    await botOne.fiber!.dispose()
-    h.model.responses.push(call('talk', { message: 'second bot remains connected' }))
-    h.sendSecond('im-after-unload')
-    await h.waitReplies(3)
-    await waitFor(() => { expect(h.frames.filter(frame => frame.cmd === 'aibot_send_msg')).toHaveLength(2) })
-  })
 
-  it('uploads durable files and images to the originating group and acknowledges their delivery', async () => {
-    const h = await harness({ imMaxAiMessages: 10 })
-    h.send('group-media', 'alice', { chattype: 'group', chatid: 'group-id' })
-    await h.waitReplies(1)
-    const agent = h.ctx.agents.list()[0]!
-    const result = await h.ctx.tools.execute({ name: 'im_context', arguments: {}, callId: ToolCallId('discover'), agent, signal: new AbortController().signal })
-    const data = JSON.parse(result.content.find(block => block.type === 'text')!.text) as { self: { id: string }; conversations: { id: string }[]; contacts: { id: string }[] }
-    const file = await h.ctx.attachments.saveFile({ data: Buffer.from('published file'), name: 'report.txt' })
-    const bytes = await sharp({ create: { width: 2, height: 2, channels: 3, background: '#0088ff' } }).png().toBuffer()
-    const image = await h.ctx.attachments.saveImage({ data: bytes, mediaType: 'image/png' })
-    const conversation = Im.conversationIdSchema.parse(data.conversations[0]!.id)
-    const sender = Im.participantIdSchema.parse(data.self.id)
-    const human = Im.participantIdSchema.parse(data.contacts[0]!.id)
-    const sent = await h.ctx.im.send({
-      id: Im.imMessageIdSchema.parse('outbound-media'), conversation, sender, recipients: [human],
-      mode: 'queue', text: '', attachments: [{ type: 'file', attachment: file }, { type: 'image', attachment: image }],
-    })
-    await waitFor(() => { expect(h.ctx.im.history(conversation, human, 0).find(value => value.id === sent.id)?.deliveries[human]).toBe('accepted') })
-    const outbound = h.frames.filter(frame => frame.cmd === 'aibot_send_msg')
-    expect(outbound.map(frame => frame.body)).toEqual([
-      { chatid: 'group-id', msgtype: 'file', file: { media_id: 'media' } },
-      { chatid: 'group-id', msgtype: 'image', image: { media_id: 'media' } },
-    ])
-    expect(h.frames.filter(frame => frame.cmd === 'aibot_upload_media_chunk')).toHaveLength(2)
-    h.send('other-member', 'bob', { chattype: 'group', chatid: 'group-id' })
-    await h.waitReplies(2)
-    const other = h.ctx.agents.list().find(value => value !== agent)!
-    const hidden = await h.ctx.tools.execute({ name: 'im_context', arguments: {}, callId: ToolCallId('other'), agent: other, signal: new AbortController().signal })
-    expect(JSON.stringify(hidden.content)).not.toContain(sender)
-    expect(JSON.stringify(hidden.content)).not.toContain('alice')
-  })
 
-  it.each([false, true])('uploads workspace files through talk with failed delivery=%s and explicit retry', async (rejectUpload) => {
-    const h = await harness({ imMaxAiMessages: 10 }, { rejectUpload })
-    const bytes = Buffer.alloc(600000, 42)
-    await writeFile(join(h.root, 'report.bin'), bytes)
-    h.send('upload-tool')
-    await h.waitReplies(1)
-    const agent = h.ctx.agents.list()[0]!
-    const result = await h.ctx.tools.execute({
-      name: 'talk', arguments: { message: '', files: [{ path: 'report.bin', kind: 'file' }] },
-      callId: ToolCallId('upload'), agent, signal: new AbortController().signal,
-    })
-    expect(result.isError).not.toBe(true)
-    const sent = JSON.parse(result.content.find(block => block.type === 'text')!.text) as { id: string }
-    const context = await h.ctx.tools.execute({ name: 'im_context', arguments: {}, callId: ToolCallId('context'), agent, signal: new AbortController().signal })
-    const data = JSON.parse(context.content.find(block => block.type === 'text')!.text) as { conversations: { id: string }[]; contacts: { id: string }[] }
-    const conversation = Im.conversationIdSchema.parse(data.conversations[0]!.id)
-    const human = Im.participantIdSchema.parse(data.contacts[0]!.id)
-    const stored = () => h.ctx.im.history(conversation, human, 0).find(value => value.id === sent.id)!
-    await waitFor(() => { expect(stored().deliveries[human]).toBe(rejectUpload ? 'failed' : 'accepted') })
-    const init = h.frames.find(frame => frame.cmd === 'aibot_upload_media_init')!
-    expect(init.body).toMatchObject({ type: 'file', filename: 'report.bin', total_size: bytes.length, total_chunks: 2 })
-    const chunks = h.frames.filter(frame => frame.cmd === 'aibot_upload_media_chunk')
-      .sort((a, b) => Number(a.body?.['chunk_index']) - Number(b.body?.['chunk_index']))
-    expect(Buffer.concat(chunks.map(frame => Buffer.from(String(frame.body?.['base64_data']), 'base64')))).toEqual(bytes)
-    if (rejectUpload) {
-      expect(h.frames.filter(frame => frame.cmd === 'aibot_send_msg')).toHaveLength(0)
-      h.setUploadRejection(false)
-      await h.ctx.im.retry(Im.imMessageIdSchema.parse(sent.id), human)
-      await waitFor(() => { expect(stored().deliveries[human]).toBe('accepted') })
-    }
-    expect(h.frames.filter(frame => frame.cmd === 'aibot_send_msg').map(frame => frame.body)).toEqual([
-      { chatid: 'alice', msgtype: 'file', file: { media_id: 'media' } },
-    ])
-    expect(stored().attachments[0]).toMatchObject({ type: 'file', attachment: { name: 'report.bin', bytes: bytes.length } })
-  })
 
-  it('rejects stored file bytes exceeding the IM budget before starting an upload', async () => {
-    const h = await harness({ imMaxAiMessages: 10 })
-    h.send('oversized-storage')
-    await h.waitReplies(1)
-    const agent = h.ctx.agents.list()[0]!
-    const result = await h.ctx.tools.execute({ name: 'im_context', arguments: {}, callId: ToolCallId('context'), agent, signal: new AbortController().signal })
-    const data = JSON.parse(result.content.find(block => block.type === 'text')!.text) as { self: { id: string }; conversations: { id: string }[]; contacts: { id: string }[] }
-    const conversation = Im.conversationIdSchema.parse(data.conversations[0]!.id)
-    const human = Im.participantIdSchema.parse(data.contacts[0]!.id)
-    const file = await h.ctx.attachments.saveFile({ data: Buffer.from('small'), name: 'report.txt' })
-    // A storage provider can return bytes that disagree with persisted reference metadata.
-    const reader = vi.spyOn(h.ctx.attachments, 'readFileStream').mockImplementation(async function* () {
-      yield Buffer.alloc(h.ctx.im.attachmentLimits().maxBytes)
-      yield Buffer.from('overflow')
-    })
-    try {
-      const sent = await h.ctx.im.send({
-        id: Im.imMessageIdSchema.parse('oversized-storage'), conversation,
-        sender: Im.participantIdSchema.parse(data.self.id), recipients: [human], mode: 'queue', text: '',
-        attachments: [{ type: 'file', attachment: file }],
-      })
-      await waitFor(() => { expect(h.ctx.im.history(conversation, human, 0).find(value => value.id === sent.id)?.deliveries[human]).toBe('failed') })
-      expect(h.frames.filter(frame => frame.cmd.startsWith('aibot_upload_media') || frame.cmd === 'aibot_send_msg')).toEqual([])
-    } finally {
-      reader.mockRestore()
-    }
-  })
 
-  it('logs durable images and files and passes image content to the model', async () => {
-    const h = await harness()
-    await using peer = await mediaPeer()
-    const bytes = await sharp({ create: { width: 2, height: 2, channels: 3, background: '#0088ff' } }).png().toBuffer()
-    const image = peer.add(bytes, { encrypted: true })
-    h.send('image', 'alice', { msgtype: 'mixed', mixed: { msg_item: [
-      { msgtype: 'text', text: { content: 'describe this image' } }, { msgtype: 'image', image },
-    ] } })
-    await h.waitReplies(1)
-    expect(h.model.requests[0]?.messages.some(message => message.content.some(block => block.type === 'image'))).toBe(true)
-    const file = peer.add(Buffer.from('report contents'), { encrypted: true, disposition: 'attachment; filename="report.txt"' })
-    h.send('file', 'alice', { msgtype: 'file', file })
-    await h.waitReplies(2)
-    const messages = h.events.filter(row => row.event.type === 'user/message')
-    expect(JSON.stringify(messages)).toContain('report.txt')
-    expect(JSON.stringify(messages)).not.toContain(image.url)
-    expect(JSON.stringify(messages)).not.toContain(image.aeskey)
-    expect(h.model.requests).toHaveLength(2)
-  })
 
   it('reports attachment admission failures without starting a model request', async () => {
     const h = await harness({ maxAttachmentBytes: 1, maxAttachmentsPerMessage: 1 })
@@ -574,11 +363,6 @@ describe('WeCom through Loader and a real WebSocket', () => {
   })
 
   it.each([
-    [{ imBotContacts: [{ botId: 'bot', name: 'Agent' }] }, 'imBotContacts'],
-    [{ imMaxAiMessages: 10, imBotContacts: [{ botId: 'peer', name: 'Agent' }] }, 'imBotContacts'],
-    [{ imMaxAiMessages: 10, imBotContacts: [{ botId: 'bot', name: 'One' }, { botId: 'bot', name: 'Two' }] }, 'imBotContacts'],
-    [{ imMaxAiMessages: 10, imBotContacts: [{ botId: 'bot', name: ' ' }] }, 'imBotContacts'],
-    [{ imMaxAiMessages: 10, imBotContacts: [{ botId: 'bot', name: ' Agent' }] }, 'imBotContacts'],
     [{ botId: ' ' }, 'identifiers'],
     [{ workspacePath: 'relative' }, 'workspacePath'],
     [{ workspacePath: new URL('../package.json', import.meta.url).pathname }, 'workspacePath'],

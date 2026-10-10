@@ -20,7 +20,6 @@ import { assertNever } from '@deepseek-ai/dsh-util-values'
 import { createReplyStream } from './reply-stream.ts'
 import { admitMessageContent } from './attachments.ts'
 import { limitReply, messageSchema, messageParts, type InboundMessage } from './message.ts'
-import { bindImConversation } from './im.ts'
 
 /** Cordis function-plugin name. */
 export const name = 'wecom'
@@ -50,15 +49,6 @@ export interface Config {
    * start.
    */
   resumeConversations?: boolean
-  /** Enable IM discovery and messaging with this durable per-conversation AI publication budget. */
-  imMaxAiMessages?: number
-  /** Trusted bot roster, including this bot, whose Agents become mutual contacts for the same user and chat. */
-  imBotContacts?: {
-    /** WeCom bot ID in the shared contact roster. */
-    botId: string
-    /** Contact name exposed to the Agents. */
-    name: string
-  }[]
   /** WeCom endpoint; unencrypted connections are permitted only on loopback. */
   wsUrl: string
   /** Maximum retained conversations until plugin reload. */
@@ -101,8 +91,6 @@ export const Config: z<Config> = z.object({
   permissionPreset: z.string().required(),
   agentPreset: z.string(),
   resumeConversations: z.boolean().default(false),
-  imMaxAiMessages: z.number().step(1).min(1),
-  imBotContacts: z.array(z.object({ botId: z.string().required(), name: z.string().required() })),
   wsUrl: z.string().default('wss://openws.work.weixin.qq.com'),
   maxConversations: z.number().step(1).min(1).default(100),
   maxPendingMessages: z.number().step(1).min(1).default(32),
@@ -128,7 +116,6 @@ const replies = {
 
 interface Conversation {
   handle?: AgentHandle
-  openImPage?: () => Promise<void>
   tail: Promise<void>
   /**
    * Session identity derived from this conversation, present only while
@@ -161,14 +148,6 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
   if (config.agentPreset !== undefined) identifiers.push(config.agentPreset)
   for (const value of identifiers) {
     if (value.trim() === '' || value.trim() !== value) throw new Error('wecom identifiers must be non-empty and trimmed')
-  }
-  const imBotContacts = config.imBotContacts?.length ? config.imBotContacts : undefined
-  if (imBotContacts !== undefined) {
-    const ids = imBotContacts.map(bot => bot.botId)
-    if (config.imMaxAiMessages === undefined || !ids.includes(config.botId) || new Set(ids).size !== ids.length
-      || imBotContacts.some(bot => [bot.botId, bot.name].some(value => value.trim() === '' || value.trim() !== value))) {
-      throw new Error('wecom imBotContacts requires IM tools and distinct named bots including this bot')
-    }
   }
   const url = new URL(config.wsUrl)
   if (url.username !== '' || url.password !== '' || !(url.protocol === 'wss:' || (url.protocol === 'ws:' && ['127.0.0.1', '[::1]', 'localhost'].includes(url.hostname)))) {
@@ -265,12 +244,6 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
       try {
         lifetime.signal.throwIfAborted()
         ctx.permissionPresets.set(handle.agent.session, config.permissionPreset)
-        if (config.imMaxAiMessages !== undefined) {
-          conversation.openImPage = await bindImConversation(
-            ctx, handle.agent, client, message, config.imMaxAiMessages, config.maxReplyBytes, imBotContacts,
-          )
-          lifetime.signal.throwIfAborted()
-        }
         conversation.handle = handle
       } catch (error: unknown) {
         await handle.dispose()
@@ -280,7 +253,6 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
     const { agent } = conversation.handle
     await agent.whenIdle()
     if (stopped()) return
-    await conversation.openImPage?.()
     const outcome: { text: string; reason?: TurnEndReason; timedOut: boolean } = { text: '', timedOut: false }
     let preview = ''
     const stopStream = ctx.on('agent/assistant-stream', ({ agent: source, frame }) => {

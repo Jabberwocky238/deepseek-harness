@@ -37,8 +37,7 @@
     "zod": "^4.4.3",
     "@deepseek-ai/dsh-util-values": "workspace:^",
     "sharp": "^0.35.3",
-    "content-disposition": "^3.0.0",
-    "@deepseek-ai/dsh-im": "workspace:^"
+    "content-disposition": "^3.0.0"
   },
   "devDependencies": {
     "@deepseek-ai/cordis": "workspace:^",

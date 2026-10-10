@@ -346,8 +346,6 @@
       "@deepseek-ai/dsh-compaction-image-offload/projection": ["./packages/compaction/compaction-image-offload/src/projection.ts"],
       "@deepseek-ai/dsh-session-format-catalog/message-projections": ["./packages/session/session-format-catalog/src/message-projections.ts"],
       "@deepseek-ai/dsh-native-command/types": ["./packages/util/native-command/src/types.ts"],
-      "@deepseek-ai/dsh-im/types": ["./packages/interaction/im/src/types.ts"],
-      "@deepseek-ai/dsh-im/runtime": ["./packages/interaction/im/src/runtime.ts"],
       "@deepseek-ai/dsh-playground": ["./packages/playground/playground/src"],
       "@deepseek-ai/dsh-wecom": ["./packages/interaction/wecom/src"],
       // BEGIN generated package aliases — pnpm run gen-tsconfig-paths
@@ -401,7 +399,6 @@
       "@deepseek-ai/dsh-hooks-claude-code": ["./packages/experimental/hooks-claude-code/src"],
       "@deepseek-ai/dsh-hooks-codex": ["./packages/experimental/hooks-codex/src"],
       "@deepseek-ai/dsh-http-proxy": ["./packages/util/http-proxy/src"],
-      "@deepseek-ai/dsh-im": ["./packages/interaction/im/src"],
       "@deepseek-ai/dsh-jobs": ["./packages/jobs/jobs/src"],
       "@deepseek-ai/dsh-jobs-local": ["./packages/jobs/jobs-local/src"],
       "@deepseek-ai/dsh-launch-environment": ["./packages/util/launch-environment/src"],

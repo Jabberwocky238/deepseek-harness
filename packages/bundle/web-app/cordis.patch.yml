@@ -578,9 +578,3 @@
 
 # Native IM is enabled by the optional IM overlay.
 - insert:
-    - id: im
-      name: '@deepseek-ai/dsh-im'
-      disabled: true
-    - id: im-runtime
-      name: '@deepseek-ai/dsh-im/runtime'
-      disabled: true

@@ -265,7 +265,6 @@
     { "path": "./packages/credentials/deepseek-account-platform" },
     { "path": "./packages/credentials/deepseek-account" },
     { "path": "./packages/interaction/wecom" },
-    { "path": "./packages/interaction/im" },
     { "path": "./packages/playground/playground" },
     { "path": "./packages/client/ui-deliverables/tsconfig.host.json" },
     { "path": "./vendor/cosmokit" },

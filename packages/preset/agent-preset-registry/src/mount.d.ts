@@ -1,18 +1,18 @@
 /** Runtime plugin trees shared by Agents selecting one preset revision. */
-import { Context, type Fiber } from '@deepseek-ai/cordis'
-import { EntryTree } from '@deepseek-ai/cordis-plugin-loader'
-import type { PresetDefinition } from './definition.ts'
-import { type ScopeKey } from '@deepseek-ai/dsh-scope'
+import { Context, type Fiber } from '@deepseek-ai/cordis';
+import { EntryTree } from '@deepseek-ai/cordis-plugin-loader';
+import type { PresetDefinition } from './definition.ts';
+import { type ScopeKey } from '@deepseek-ai/dsh-scope';
 /** One live revision shared by Agents and scoped readers. */
 export interface PresetMount {
-  /** The preset the subtree was composed from. */
-  readonly presetId: string
-  /** The mounted subtree's fiber. */
-  readonly fiber: Fiber
-  /** Loader entry tree whose active rows form this standing composition. */
-  readonly tree: EntryTree
-  /** The standing scope key agents are parented to (undefined only in torn-down records). */
-  readonly key: ScopeKey | undefined
+    /** The preset the subtree was composed from. */
+    readonly presetId: string;
+    /** The mounted subtree's fiber. */
+    readonly fiber: Fiber;
+    /** Loader entry tree whose active rows form this standing composition. */
+    readonly tree: EntryTree;
+    /** The standing scope key agents are parented to (undefined only in torn-down records). */
+    readonly key: ScopeKey | undefined;
 }
 /**
  * Service names the mounted subtree published into the root realm.
@@ -25,7 +25,7 @@ export interface PresetMount {
  * @param mount - the mounted subtree's fiber.
  * @returns the leaked service names in lexical order.
  */
-export declare function leakedServices(ctx: Context, mount: Fiber): string[]
+export declare function leakedServices(ctx: Context, mount: Fiber): string[];
 /**
  * Read a service implementation owned by one retained preset, including isolated realms.
  *
@@ -39,17 +39,17 @@ export declare function leakedServices(ctx: Context, mount: Fiber): string[]
  * @param name - the service name as the preset's rows resolve it.
  * @returns the implementation, or undefined when the mount provides none.
  */
-export declare function serviceForMount<K extends string & keyof Context>(ctx: Context, mount: PresetMount, name: K): Context[K] | undefined
+export declare function serviceForMount<K extends string & keyof Context>(ctx: Context, mount: PresetMount, name: K): Context[K] | undefined;
 /** Rows that did not reach a usable state, each rendered as one diagnostic line. */
 export interface RowAudit {
-  /** Rows that never started or whose import or activation rejected. */
-  readonly failed: string[]
-  /**
+    /** Rows that never started or whose import or activation rejected. */
+    readonly failed: string[];
+    /**
      * Rows waiting for a service the composition does not supply. A Host
      * provider still activating completes such a row later; only a settled Host
      * tree tells that case from a genuinely missing service.
      */
-  readonly pending: string[]
+    readonly pending: string[];
 }
 /**
  * Audit the rows of a mounted subtree.
@@ -59,7 +59,7 @@ export interface RowAudit {
  * @param tree - the mounted subtree.
  * @returns failed and pending rows, both empty when every enabled row is usable.
  */
-export declare function auditRows(tree: EntryTree): Promise<RowAudit>
+export declare function auditRows(tree: EntryTree): Promise<RowAudit>;
 /** Load and audit one revision under its registry-owned scope.
  *
  * Failed rows and root-realm service leaks reject the mount. Rows waiting for
@@ -73,5 +73,5 @@ export declare function auditRows(tree: EntryTree): Promise<RowAudit>
  * @param plugins Declared Cordis entry list.
  * @returns The live tree; scope disposal owns its teardown.
  */
-export declare function mountPreset(ctx: Context, id: string, plugins: PresetDefinition['plugins']): Promise<PresetMount>
+export declare function mountPreset(ctx: Context, id: string, plugins: PresetDefinition['plugins']): Promise<PresetMount>;
 //# sourceMappingURL=mount.d.ts.map

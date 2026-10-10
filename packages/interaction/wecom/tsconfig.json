@@ -18,7 +18,7 @@
       "path": "../../core/agent-default-model"
     },
     {
-      "path": "../../preset/agent-presets"
+      "path": "../../preset/agent-preset-registry"
     },
     {
       "path": "../../credentials/credentials"

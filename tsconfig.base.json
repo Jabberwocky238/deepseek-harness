@@ -348,6 +348,7 @@
       "@deepseek-ai/dsh-native-command/types": ["./packages/util/native-command/src/types.ts"],
       "@deepseek-ai/dsh-playground": ["./packages/playground/playground/src"],
       "@deepseek-ai/dsh-wecom": ["./packages/interaction/wecom/src"],
+      "@deepseek-ai/dsh-tool-wecom": ["./packages/interaction/tool-wecom/src"],
       // BEGIN generated package aliases — pnpm run gen-tsconfig-paths
       "@deepseek-ai/dsh-acp": ["./packages/acp/acp/src"],
       "@deepseek-ai/dsh-acp-app": ["./packages/bundle/acp-app/src"],

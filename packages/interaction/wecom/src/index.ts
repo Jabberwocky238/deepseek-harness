@@ -18,12 +18,27 @@ import { WSClient } from '@wecom/aibot-node-sdk'
 import { assertNever } from '@deepseek-ai/dsh-util-values'
 import { createReplyStream } from './reply-stream.ts'
 import { admitMessageContent } from './attachments.ts'
+import { sendToChat, type WecomDelivered, type WecomOutbound } from './send.ts'
 import { limitReply, messageSchema, messageParts, type InboundMessage } from './message.ts'
 
 /** Cordis function-plugin name. */
 export const name = 'wecom'
+
 /** Services required before the bot accepts messages. */
 export const inject = ['agents', 'sessions', 'credentials', 'agentDefaultModel', 'permissionPresets', 'attachments', 'sessionProjections', 'tools']
+
+declare module '@deepseek-ai/cordis' {
+  interface Context {
+    /**
+     * Proactive outbound delivery, addressed by the Session that owns the chat.
+     * A tool package publishes through this seam instead of holding the bot's
+     * transport, and a Session the bot does not own has no target.
+     */
+    wecom: {
+      send(sessionId: SessionId, outbound: WecomOutbound): Promise<WecomDelivered>
+    }
+  }
+}
 
 /** Connection, admission, and Agent settings for one WeCom bot. */
 export interface Config {
@@ -180,6 +195,19 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
   const jobs = new Set<Promise<void>>()
   const allowed = new Set(config.allowedUsers)
   const copy = replies[config.language]
+  /**
+   * The outbound surface a tool package publishes through: one authenticated
+   * chat per live Session. A Session the bot does not own finds no target, so a
+   * tool cannot address a chat this process is not connected to.
+   */
+  const sendTargets = new Map<string, { client: WSClient; chatid: string }>()
+  ctx.provide('wecom', {
+    send: async (sessionId: string, outbound: WecomOutbound): Promise<WecomDelivered> => {
+      const target = sendTargets.get(sessionId)
+      if (target === undefined) throw new Error('wecom: this Session is not an authenticated WeCom conversation')
+      return sendToChat(target.client, target.chatid, outbound)
+    },
+  })
   // SDK diagnostics can contain callback bodies; expose only fixed transport notices.
   const client = new WSClient({
     botId: config.botId,
@@ -247,6 +275,14 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
         lifetime.signal.throwIfAborted()
         ctx.permissionPresets.set(handle.agent.session, config.permissionPreset)
         conversation.handle = handle
+        // The chat this Session answers in: a group's own id, or the user id of
+        // a direct chat. Outbound tools address this Session, never a raw chat.
+        sendTargets.set(handle.agent.session.id, {
+          client,
+          chatid: message.body.chattype === 'group'
+            ? message.body.chatid ?? message.body.from.userid
+            : message.body.from.userid,
+        })
       } catch (error: unknown) {
         await handle.dispose()
         throw error
@@ -381,6 +417,7 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
       conversations.clear()
       pending.clear()
       recent.clear()
+      sendTargets.clear()
       await presetScope?.[Symbol.asyncDispose]()
       const failures = disposed.filter(result => result.status === 'rejected')
       if (failures.length > 0) throw new AggregateError(failures.map(result => result.reason as unknown), 'wecom Agent disposal failed')

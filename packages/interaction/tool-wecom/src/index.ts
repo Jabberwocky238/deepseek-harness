@@ -13,8 +13,8 @@
 import { basename } from 'node:path'
 import type { Context } from '@deepseek-ai/cordis'
 import { defineTool } from '@deepseek-ai/dsh-tools'
-import '@deepseek-ai/dsh-fs'
-import '@deepseek-ai/dsh-wecom'
+import type {} from '@deepseek-ai/dsh-fs'
+import type {} from '@deepseek-ai/dsh-wecom'
 
 export const name = 'tool-wecom'
 

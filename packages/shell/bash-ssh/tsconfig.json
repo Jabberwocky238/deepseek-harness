@@ -31,6 +31,12 @@
     },
     {
       "path": "../../util/output-retention"
+    },
+    {
+      "path": "../../sandbox/sandbox"
+    },
+    {
+      "path": "../../sandbox/sandbox-policy"
     }
   ]
 }

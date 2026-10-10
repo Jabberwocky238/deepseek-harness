@@ -7,6 +7,8 @@ import ssh2 from 'ssh2'
 import type { ClientChannel } from 'ssh2'
 import { ShellExecutor } from '@deepseek-ai/dsh-shell'
 import type { ShellExecRequest, ShellExecSpec, ShellProcess, ShellRunResult } from '@deepseek-ai/dsh-shell'
+import type { SandboxMode } from '@deepseek-ai/dsh-sandbox'
+import type {} from '@deepseek-ai/dsh-sandbox-policy'
 import { clampTimeout } from '@deepseek-ai/dsh-timeout'
 import { remoteCommand, remoteWorkdir } from './command.ts'
 import { TailOutput } from './output.ts'
@@ -60,8 +62,17 @@ function validate(config: ResolvedConfig): void {
 /**
  * Runs fresh Bash commands through SSH PTYs. Timeout sends SIGINT inside the remote
  * shell; cancellation writes Ctrl-C. Ignored interrupts leave calls and disposal waiting.
+ *
+ * The remote host is this executor's confinement boundary: the deployment gives
+ * every consumer its own container, so commands are already confined by the time
+ * they reach the login shell. The executor therefore reports the deployment's
+ * sandbox mode and passes each call's policy through, which is what lets
+ * `@deepseek-ai/dsh-permission-presets` — whose service requires a confining
+ * `ctx.shell` — compose over it. The remote side adds no sandboxing of its own.
  */
 export class SshBashExecutor extends ShellExecutor {
+  static inject = ['sandboxPolicy']
+
   static Config: z<Config> = z.object({
     host: z.string().required(), username: z.string().required(), hostKeySha256: z.string().required(),
     cwd: z.string().required(), privateKeyFile: z.string(), agentSocket: z.string(), localWorkspaceRoot: z.string(),
@@ -72,15 +83,23 @@ export class SshBashExecutor extends ShellExecutor {
   private readonly config: ResolvedConfig
   private readonly active = new Set<ShellProcess>()
   private readonly lifecycle = new AbortController()
+  /** The deployment's sandbox mode, reported so a permission-preset service can compose. */
+  private readonly mode: SandboxMode
 
   constructor(ctx: Context, config: Config) {
     super(ctx)
     this.config = config as ResolvedConfig
     validate(this.config)
+    this.mode = ctx.sandboxPolicy.defaultMode
     ctx.effect(() => async () => {
       this.lifecycle.abort()
       await Promise.all([...this.active].map(proc => proc.done))
     }, 'bash-ssh Ctrl-C and settlement')
+  }
+
+  /** The confinement the remote container provides; the knob lives on `ctx.sandboxPolicy`. */
+  override get sandboxMode(): SandboxMode {
+    return this.mode
   }
 
   resolve(request: ShellExecRequest): ShellExecSpec {
@@ -91,7 +110,7 @@ export class SshBashExecutor extends ShellExecutor {
       workdir: remoteWorkdir(request.workdir, this.config.cwd, this.config.localWorkspaceRoot),
       timeoutMs: clampTimeout(request.timeoutMs, this.config.timeoutMs, this.config.maxTimeoutMs, 'bash-ssh: timeoutMs'),
       stdoutMaxBytes,
-      sandboxPolicy: request.sandboxPolicy,
+      sandboxPolicy: request.sandboxPolicy ?? this.ctx.sandboxPolicy.resolve(),
     }
   }
 

@@ -29,7 +29,12 @@ const media = z.object({
   aeskey: z.string().regex(/^[A-Za-z0-9+/]{43}=?$/).optional(),
 })
 const imagePart = z.object({ msgtype: z.literal('image'), image: media })
-const part = z.discriminatedUnion('msgtype', [textPart, imagePart, z.object({ msgtype: z.literal('file'), file: media })])
+const filePart = z.object({ msgtype: z.literal('file'), file: media })
+const videoPart = z.object({ msgtype: z.literal('video'), video: media })
+// WeCom sends voice as its own transcription: the callback carries the
+// recognized text and no audio URL, so voice can be admitted as text only.
+const voicePart = z.object({ msgtype: z.literal('voice'), voice: z.object({ content: z.string() }) })
+const part = z.discriminatedUnion('msgtype', [textPart, imagePart, filePart, videoPart, voicePart])
 const payload = z.union([
   part,
   z.object({ msgtype: z.literal('mixed'), mixed: z.object({ msg_item: z.array(z.discriminatedUnion('msgtype', [textPart, imagePart])).min(1) }) }),
@@ -46,7 +51,7 @@ export const messageSchema = z.object({
 
 /** Parsed callback; download URLs and keys are consumed only by attachment admission. */
 export type InboundMessage = z.infer<typeof messageSchema>
-/** One ordered text, image, or file input from a callback. */
+/** One ordered text, voice, or media input from a callback. */
 export type MessagePart = z.infer<typeof part>
 
 /**

@@ -75,6 +75,19 @@ export interface Config {
   maxInputBytes: number
   /** Maximum total decrypted attachment bytes admitted from one message. */
   maxAttachmentBytes: number
+  /**
+   * Absolute directory inside the Agent's own filesystem where inbound
+   * attachments are saved and named in the prompt, so the Agent can open the
+   * bytes with its tools whatever their format is.
+   */
+  inboundDir: string
+  /**
+   * Host-side path bound to {@link inboundDir}. The plugin writes attachments
+   * here; the provider's filesystem has no binary write, so the bytes reach the
+   * container through the deployment's own mount. Omission keeps inbound
+   * attachments in the attachment store only.
+   */
+  inboundHostDir?: string
   /** Maximum image or file parts admitted from one message. */
   maxAttachmentsPerMessage: number
   /** Total attachment download and admission deadline in milliseconds. */
@@ -111,6 +124,8 @@ export const Config: z<Config> = z.object({
   maxRecentMessages: z.number().step(1).min(1).default(1000),
   maxInputBytes: z.number().step(1).min(1).default(16384),
   maxAttachmentBytes: z.number().step(1).min(1).default(20971520),
+  inboundDir: z.string().default('/home/agent/inbox'),
+  inboundHostDir: z.string(),
   maxAttachmentsPerMessage: z.number().step(1).min(1).default(20),
   attachmentTimeoutMs: z.number().step(1).min(1).max(300000).default(30000),
   maxReplyBytes: z.number().step(1).min(4).max(20480).default(20480),
@@ -173,6 +188,14 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
   if (!isAbsolute(config.workspacePath)) {
     throw new Error('wecom workspacePath must be an absolute path')
   }
+  if (config.inboundHostDir !== undefined && !(isAbsolute(config.inboundDir) && isAbsolute(config.inboundHostDir))) {
+    throw new Error('wecom inbound directories must be absolute paths')
+  }
+  // Inbound attachments are published into the Agent's filesystem through a
+  // deployment-provided mount, so the plugin writes its host side.
+  const inbox = config.inboundHostDir === undefined
+    ? undefined
+    : { agentDir: config.inboundDir, hostDir: config.inboundHostDir }
   ctx.permissionPresets.resolve(config.permissionPreset)
   const presets = ctx.get('agentPresets')
   let mountPreset: ((agentCtx: Context) => Promise<unknown>) | undefined
@@ -243,7 +266,7 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
     let content: ContentBlock[]
     try {
       const signal = AbortSignal.any([lifetime.signal, AbortSignal.timeout(config.attachmentTimeoutMs)])
-      content = await admitMessageContent(ctx.attachments, messageParts(message), config.maxAttachmentBytes, signal)
+      content = await admitMessageContent(ctx.attachments, messageParts(message), config.maxAttachmentBytes, signal, inbox)
     } catch {
       ctx.logger.warn('wecom attachment admission failed')
       await stream.finish(copy.attachmentFailed)
@@ -261,20 +284,20 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
       const sessionId = conversation.sessionId ?? SessionId(`wecom-${randomUUID()}`)
       const handle = conversation.sessionId === undefined
         ? await ctx.agents.create({
+          sessionId,
+          signal: lifetime.signal,
+          meta: { cwd: config.workspacePath, ...(config.agentPreset === undefined ? {} : { agentPreset: config.agentPreset }) },
+          agentOptions,
+          setup,
+        })
+        : await ctx.agents.resume({ resumeSessionId: sessionId, signal: lifetime.signal, agentOptions, setup })
+          .catch(() => ctx.agents.create({
             sessionId,
             signal: lifetime.signal,
             meta: { cwd: config.workspacePath, ...(config.agentPreset === undefined ? {} : { agentPreset: config.agentPreset }) },
             agentOptions,
             setup,
-          })
-        : await ctx.agents.resume({ resumeSessionId: sessionId, signal: lifetime.signal, agentOptions, setup })
-            .catch(() => ctx.agents.create({
-              sessionId,
-              signal: lifetime.signal,
-              meta: { cwd: config.workspacePath, ...(config.agentPreset === undefined ? {} : { agentPreset: config.agentPreset }) },
-              agentOptions,
-              setup,
-            }))
+          }))
       try {
         lifetime.signal.throwIfAborted()
         ctx.permissionPresets.set(handle.agent.session, config.permissionPreset)

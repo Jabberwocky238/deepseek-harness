@@ -1,6 +1,6 @@
 /** WeCom text and attachment ingress with streaming replies over owned Agent activity intervals. */
 
-import { randomUUID } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import { stat } from 'node:fs/promises'
 import { isAbsolute } from 'node:path'
 import type { Context } from '@deepseek-ai/cordis'
@@ -41,6 +41,15 @@ export interface Config {
   permissionPreset: string
   /** Optional Agent preset; omission uses globally mounted capabilities. */
   agentPreset?: string
+  /**
+   * Resume each conversation's persisted Session across restarts instead of
+   * starting a fresh one. Off by default: the ids a conversation maps to are
+   * then random and process-local, so a reload begins a new conversation.
+   * Turning this on derives the Session id from the WeCom conversation itself,
+   * so a mounted Session persistence restores the earlier history on the next
+   * start.
+   */
+  resumeConversations?: boolean
   /** Enable IM discovery and messaging with this durable per-conversation AI publication budget. */
   imMaxAiMessages?: number
   /** Trusted bot roster, including this bot, whose Agents become mutual contacts for the same user and chat. */
@@ -91,6 +100,7 @@ export const Config: z<Config> = z.object({
   workspacePath: z.string().required(),
   permissionPreset: z.string().required(),
   agentPreset: z.string(),
+  resumeConversations: z.boolean().default(false),
   imMaxAiMessages: z.number().step(1).min(1),
   imBotContacts: z.array(z.object({ botId: z.string().required(), name: z.string().required() })),
   wsUrl: z.string().default('wss://openws.work.weixin.qq.com'),
@@ -120,6 +130,24 @@ interface Conversation {
   handle?: AgentHandle
   openImPage?: () => Promise<void>
   tail: Promise<void>
+  /**
+   * Session identity derived from this conversation, present only while
+   * `resumeConversations` is on. It outlives the process: the same WeCom
+   * conversation recomputes the same id on the next start.
+   */
+  sessionId?: SessionId
+}
+
+/**
+ * Stable Session id for one WeCom conversation, derived from the bot and the
+ * conversation key this plugin already tracks. Used only when
+ * `resumeConversations` is on: the same conversation then recomputes the same
+ * id on a later start, so a mounted Session persistence resumes its history
+ * instead of opening a new conversation.
+ */
+function conversationSessionId(botId: string, key: string): SessionId {
+  const digest = createHash('sha256').update(JSON.stringify([botId, key])).digest('hex')
+  return SessionId(`wecom-${digest}`)
 }
 
 /**
@@ -210,16 +238,30 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
     }
     if (conversation.handle === undefined) {
       const selection = ctx.agentDefaultModel.currentSelection()
-      const handle = await ctx.agents.create({
-        sessionId: SessionId(`wecom-${randomUUID()}`),
-        signal: lifetime.signal,
-        meta: { cwd: config.workspacePath, ...(config.agentPreset === undefined ? {} : { agentPreset: config.agentPreset }) },
-        agentOptions: { provider: selection.provider, model: selection.model },
-        setup: async (agentCtx) => {
-          await mountPreset?.(agentCtx)
-          installModelSelection(agentCtx, { current: selection, assembled: undefined })
-        },
-      })
+      const setup = async (agentCtx: Context): Promise<void> => {
+        await mountPreset?.(agentCtx)
+        installModelSelection(agentCtx, { current: selection, assembled: undefined })
+      }
+      const agentOptions = { provider: selection.provider, model: selection.model }
+      // No persisted conversation takes the random-id path, and a resumed one
+      // falls back to creation while its log is still absent.
+      const sessionId = conversation.sessionId ?? SessionId(`wecom-${randomUUID()}`)
+      const handle = conversation.sessionId === undefined
+        ? await ctx.agents.create({
+            sessionId,
+            signal: lifetime.signal,
+            meta: { cwd: config.workspacePath, ...(config.agentPreset === undefined ? {} : { agentPreset: config.agentPreset }) },
+            agentOptions,
+            setup,
+          })
+        : await ctx.agents.resume({ resumeSessionId: sessionId, signal: lifetime.signal, agentOptions, setup })
+            .catch(() => ctx.agents.create({
+              sessionId,
+              signal: lifetime.signal,
+              meta: { cwd: config.workspacePath, ...(config.agentPreset === undefined ? {} : { agentPreset: config.agentPreset }) },
+              agentOptions,
+              setup,
+            }))
       try {
         lifetime.signal.throwIfAborted()
         ctx.permissionPresets.set(handle.agent.session, config.permissionPreset)
@@ -312,7 +354,10 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
       return
     }
     if (conversation === undefined) {
-      conversation = { tail: Promise.resolve() }
+      conversation = {
+        tail: Promise.resolve(),
+        ...config.resumeConversations ? { sessionId: conversationSessionId(config.botId, key) } : {},
+      }
       conversations.set(key, conversation)
     }
     pending.add(body.msgid)

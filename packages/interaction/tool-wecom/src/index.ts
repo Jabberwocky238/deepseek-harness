@@ -82,7 +82,13 @@ export function apply(ctx: Context): void {
         remaining -= data.byteLength
         files.push({ data, name: basename(file.path), kind: file.kind })
       }
-      return await ctx.wecom.send(session.id, { files })
+      // Return exactly the declared output shape. The delivery seam reports
+      // more than the model needs (`{ text, files }`), and handing that object
+      // back fails the `additionalProperties: false` output schema *after* the
+      // attachments are already in the chat — the call then reads as failed and
+      // the model retries, delivering the same file again for every attempt.
+      const delivered = await ctx.wecom.send(session.id, { files })
+      return { files: delivered.files }
     },
   }))
 }

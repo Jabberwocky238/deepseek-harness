@@ -1,6 +1,6 @@
 {
   "name": "@deepseek-ai/dsh-tool-wecom",
-  "description": "Model-facing talk tool that publishes text, images and files to a WeCom conversation",
+  "description": "Model-facing sendfile tool that publishes attachments, without text, to a WeCom conversation",
   "version": "0.2.1-alpha.2",
   "publishConfig": {
     "access": "public"

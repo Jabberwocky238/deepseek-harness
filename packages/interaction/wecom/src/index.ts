@@ -200,12 +200,20 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
    * chat per live Session. A Session the bot does not own finds no target, so a
    * tool cannot address a chat this process is not connected to.
    */
-  const sendTargets = new Map<string, { client: WSClient; chatid: string; delivered: boolean }>()
+  const sendTargets = new Map<string, { client: WSClient; chatid: string; delivered: boolean; sent: Set<string> }>()
   ctx.provide('wecom', {
     send: async (sessionId: string, outbound: WecomOutbound): Promise<WecomDelivered> => {
       const target = sendTargets.get(sessionId)
       if (target === undefined) throw new Error('wecom: this Session is not an authenticated WeCom conversation')
-      const delivered = await sendToChat(target.client, target.chatid, outbound)
+      // A model that re-issues the same call in one turn must not fill the chat
+      // with copies: an attachment with the same name and size is the same file.
+      const fresh = (outbound.files ?? []).filter((file) => {
+        const key = `${file.kind}\u0000${file.name}\u0000${file.data.byteLength}`
+        if (target.sent.has(key)) return false
+        target.sent.add(key)
+        return true
+      })
+      const delivered = await sendToChat(target.client, target.chatid, { text: outbound.text, files: fresh })
       // A tool already put this turn's attachments in the chat, so the closing
       // text has to follow them instead of completing the anchored reply.
       if (delivered.files > 0) target.delivered = true
@@ -287,6 +295,7 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
             ? message.body.chatid ?? message.body.from.userid
             : message.body.from.userid,
           delivered: false,
+          sent: new Set<string>(),
         })
       } catch (error: unknown) {
         await handle.dispose()
@@ -296,7 +305,10 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
     const { agent } = conversation.handle
     // 本轮是否已用主动消息发过附件，决定收尾文字走流式还是主动消息。
     const target = sendTargets.get(agent.session.id)
-    if (target !== undefined) target.delivered = false
+    if (target !== undefined) {
+      target.delivered = false
+      target.sent = new Set<string>()
+    }
     await agent.whenIdle()
     if (stopped()) return
     const outcome: { text: string; reason?: TurnEndReason; timedOut: boolean } = { text: '', timedOut: false }

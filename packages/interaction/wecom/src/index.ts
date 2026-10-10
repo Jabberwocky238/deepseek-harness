@@ -143,6 +143,12 @@ const replies = {
   en: { attachmentFailed: 'The attachment could not be processed. Check its size or send it again.', processing: 'Working…', busy: 'The bot is busy. Please try again later.', failed: 'The task did not complete. Please try again later.', timeout: 'The task timed out and was stopped.', empty: 'This task produced no text reply.', large: 'The message is too long. Please shorten it and try again.', done: 'Sent.' },
 }
 
+/** What one tool call is doing, in the words the people in the chat use. */
+const activity: Record<'zh' | 'en', Record<string, string>> = {
+  zh: { bash: '正在执行操作', sendfile: '正在发送文件', present: '正在整理文件', todo: '正在安排任务', default: '正在处理' },
+  en: { bash: 'Running a command', sendfile: 'Sending a file', present: 'Preparing a file', todo: 'Planning tasks', default: 'Working' },
+}
+
 interface Conversation {
   handle?: AgentHandle
   tail: Promise<void>
@@ -349,6 +355,12 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
     })
     const stop = ctx.on('session/event', (session, event) => {
       if (session !== agent.session) return
+      // The reply is ONE streamed block the whole turn long: every update
+      // replaces its text, so the chat shows the Agent's live progress in a
+      // single bubble instead of a frozen placeholder or a pile of messages.
+      if (event.type === 'tool/call') {
+        stream.update(`${config.language === 'zh' ? `第 ${event.data.step} 步` : `Step ${event.data.step}`} · ${activity[config.language][event.data.name] ?? activity[config.language].default}`)
+      }
       if (event.type === 'assistant/message') {
         outcome.text = event.data.message.content.filter(block => block.type === 'text').map(block => block.text).join('')
         stream.update(outcome.text || copy.processing)

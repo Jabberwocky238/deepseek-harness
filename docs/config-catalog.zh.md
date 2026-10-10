@@ -576,36 +576,6 @@ export interface Config {
 
 来源：[`packages/credentials/credentials-local/src/index.ts:64`](../packages/credentials/credentials-local/src/index.ts)
 
-<a id="deepseek-aidsh-data-lake"></a>
-
-## `@deepseek-ai/dsh-data-lake`
-
-```ts config-catalog
-/** Multiple independently indexed roots mounted by one service. */
-export interface Config {
-  /** Each lake owns exactly one root index and its directory maps. */
-  lakes: LakeConfig[]
-}
-
-/** Configuration for one lake; indexing runs only when requested. */
-export interface LakeConfig {
-  /** Unique name used by service consumers and model tools. */
-  id: string
-  /** Absolute directory path or s3://bucket/prefix/ root. */
-  root: string
-  /** Required for S3 roots. */
-  region?: string
-  /** Optional S3-compatible service endpoint. */
-  endpoint?: string
-  /** Use path-style S3 addressing. */
-  forcePathStyle?: boolean
-  /** Maximum entries accepted by a complete scan. */
-  maxEntries: number
-}
-```
-
-来源： [`packages/storage/data-lake/src/index.ts:40`](../packages/storage/data-lake/src/index.ts)
-
 <a id="deepseek-aidsh-e2b"></a>
 
 ## `@deepseek-ai/dsh-e2b`
@@ -2860,26 +2830,6 @@ export interface Config {
 
 来源：[`packages/shell/tool-bash-persistent/src/index.ts:435`](../packages/shell/tool-bash-persistent/src/index.ts)
 
-<a id="deepseek-aidsh-tool-data-lake"></a>
-
-## `@deepseek-ai/dsh-tool-data-lake`
-
-依赖： `tools` · `dataLake`
-
-```ts config-catalog
-/** Bounds on model-visible catalog pages and agent-authored summaries. */
-export interface Config {
-  /** Maximum entries in one result page. */
-  maxPageEntries: number
-  /** Maximum UTF-8 bytes of the complete rendered result. */
-  maxOutputBytes: number
-  /** Maximum UTF-8 bytes of one agent-authored summary. */
-  maxSummaryBytes: number
-}
-```
-
-来源： [`packages/storage/tool-data-lake/src/index.ts:17`](../packages/storage/tool-data-lake/src/index.ts)
-
 <a id="deepseek-aidsh-tool-fs"></a>
 
 ## `@deepseek-ai/dsh-tool-fs`
@@ -3543,98 +3493,6 @@ export interface Config {
 ```
 
 来源：[`packages/webhook/webhook-github/src/index.ts:17`](../packages/webhook/webhook-github/src/index.ts)
-
-<a id="deepseek-aidsh-webwjkj"></a>
-
-## `@deepseek-ai/dsh-webwjkj`
-
-依赖： `webServer`
-
-```ts config-catalog
-/** Homepage plugin settings. */
-export interface Config {
-  /** UI source build directory, or bundled for the package build output. */
-  workbenchRoot?: string | undefined
-  /** When absent, serve only the public homepage. */
-  auth?: AuthConfig | undefined
-}
-
-/** Account runtime settings; omitted providers explicitly disable their action. */
-export interface AuthConfig {
-  /** Private directory containing the authentication database and signing key. */
-  root: string
-  /** Explicit loopback-only fixture account; uses a separate local-test database directory. */
-  localTestAccount?: boolean
-  /** Canonical browser origin; HTTPS except for loopback development. */
-  publicOrigin: string
-  /** Verification-code lifetime in seconds. */
-  otpSeconds: number
-  /** Failed verification attempts allowed for one code. */
-  otpAttempts: number
-  /** Minimum seconds between sends to one phone or mailbox. */
-  resendSeconds: number
-  /** Maximum sends per recipient per rolling 24-hour window. */
-  dailySendLimit: number
-  /** Login session lifetime in seconds. */
-  sessionSeconds: number
-  /** Maximum authentication requests per peer per minute. */
-  requestsPerMinute: number
-  /** Provider request timeout in milliseconds. */
-  providerTimeoutMs: number
-  /** Maximum accepted form body size in bytes. */
-  maxBodyBytes: number
-  /** Time allowed to acquire the cross-process authentication lock. */
-  lockWaitMs: number
-  /** Optional Tencent Cloud SMS provider. */
-  sms?: SmsConfig | undefined
-  /** Optional SMTP provider for verified email binding. */
-  mail?: MailConfig | undefined
-  /** Optional WeChat website OAuth provider. */
-  wechat?: WechatConfig | undefined
-}
-
-/** Tencent Cloud SMS template and credential references. */
-export interface SmsConfig {
-  /** Tencent SMS application ID. */
-  sdkAppId: string
-  /** Approved SMS signature. */
-  signName: string
-  /** Approved template containing one verification-code parameter. */
-  templateId: string
-  /** Tencent Cloud API region. */
-  region: string
-  /** Environment reference for the CAM SecretId. */
-  secretIdEnv: string
-  /** Environment reference for the CAM SecretKey. */
-  secretKeyEnv: string
-}
-
-/** SMTP delivery settings for email binding. */
-export interface MailConfig {
-  /** SMTP hostname. */
-  host: string
-  /** SMTP port. */
-  port: number
-  /** Implicit TLS; false requires STARTTLS. */
-  secure: boolean
-  /** SMTP username. */
-  user: string
-  /** Environment reference for the SMTP password. */
-  passwordEnv: string
-  /** Verified sender mailbox. */
-  from: string
-}
-
-/** WeChat Open Platform website application. */
-export interface WechatConfig {
-  /** Website application AppID. */
-  appId: string
-  /** Environment reference for its AppSecret. */
-  secretEnv: string
-}
-```
-
-来源： [`packages/bundle/webwjkj/src/auth-config.ts:79`](../packages/bundle/webwjkj/src/auth-config.ts)
 
 <a id="deepseek-aidsh-wecom"></a>
 

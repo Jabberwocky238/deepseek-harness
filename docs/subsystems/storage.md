@@ -152,14 +152,6 @@ type DomainChanged = DomainChangedPut | DomainChangedDeleted
 
 `put` (inserts, overwrites, and global writes) carries the new snapshot in `value` — never the old value; a diffing consumer keeps its own previous snapshot. `deleted` is a tombstone with no value. The event is a notification, not a transaction participant: the commit point has passed at emission, so a synchronously throwing listener is contained with a logged warning rather than rejecting the already-durable write, and emitted values equal the in-memory state at emission. The event is in-process only; cross-process change push is a recorded limitation ([package README](../../packages/storage/storage-domain/README.md)).
 
-## Data lakes: `ctx.dataLake`
-
-The [data-lake service](../../packages/storage/data-lake/README.md) configures multiple independent disk directories or S3 prefixes. Each lake owns one root index locating any number of single-level directory maps; every map and agent-authored summary lives under its own directory. The [model tool](../../packages/storage/tool-data-lake/README.md) selects a lake by ID, pages its index and maps, and saves summaries against current directory revisions. Lake records remain separate from the structured domain storage facility.
-
-<!-- BEGIN GENERATED cordis-surface (gen-cordis-catalog.ts) — do not edit between markers -->
-
-<a id="cordis-surface"></a>
-
 ## Cordis API
 
 Generated from source by `scripts/gen-cordis-catalog.ts` (verified fresh by `pnpm run verify-cordis-catalog` in doc-sync; regenerate with `pnpm run gen-cordis-catalog`) — the language sides differ only in locale-specific paired document paths. Signature blocks use a `ts cordis-catalog` fence and keep the original source JSDoc; dispatch modes are defined in the [primer](../cordis-primer.md#dispatch-modes), and the framework-inherited `ctx` API lives in [cordis-api/inherited.md](../cordis-api/inherited.md).

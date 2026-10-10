@@ -1,7 +1,6 @@
 /** WeCom text and attachment ingress with streaming replies over owned Agent activity intervals. */
 
 import { createHash, randomUUID } from 'node:crypto'
-import { stat } from 'node:fs/promises'
 import { isAbsolute } from 'node:path'
 import type { Context } from '@deepseek-ai/cordis'
 import type { AgentHandle } from '@deepseek-ai/dsh-agent'
@@ -153,8 +152,11 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
   if (url.username !== '' || url.password !== '' || !(url.protocol === 'wss:' || (url.protocol === 'ws:' && ['127.0.0.1', '[::1]', 'localhost'].includes(url.hostname)))) {
     throw new Error('wecom wsUrl must use wss, or ws on loopback, without URL credentials')
   }
-  if (!isAbsolute(config.workspacePath) || !(await stat(config.workspacePath)).isDirectory()) {
-    throw new Error('wecom workspacePath must name an existing absolute directory')
+  // Only the shape is checked here. The directory belongs to whichever
+  // filesystem provider is composed -- a remote SSH provider has no local
+  // path to stat, and the provider reports a missing directory on first use.
+  if (!isAbsolute(config.workspacePath)) {
+    throw new Error('wecom workspacePath must be an absolute path')
   }
   ctx.permissionPresets.resolve(config.permissionPreset)
   const presets = ctx.get('agentPresets')

@@ -152,12 +152,14 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
   ctx.permissionPresets.resolve(config.permissionPreset)
   const presets = ctx.get('agentPresets')
   let mountPreset: ((agentCtx: Context) => Promise<unknown>) | undefined
+  // The registry hands out a standing scope per preset; this plugin holds it for
+  // its own lifetime so every session it creates joins the same mounted tree.
+  let presetScope: AsyncDisposable | undefined
   if (config.agentPreset !== undefined) {
-    if (presets === undefined) throw new Error('wecom agentPreset requires the agent-presets plugin')
-    await presets.resolve(config.agentPreset)
-    await presets.standingKeyFor(config.agentPreset)
-    const presetId = config.agentPreset
-    mountPreset = agentCtx => presets.mount(agentCtx, presetId)
+    if (presets === undefined) throw new Error('wecom agentPreset requires the agent-preset registry plugin')
+    const preset = await presets.resolve(config.agentPreset)
+    presetScope = await presets.acquireScope(preset.id)
+    mountPreset = agentCtx => presets.mount(agentCtx, preset.id)
   }
   const credential = await ctx.credentials.resolve(credentialRef(config.secretEnv))
   if (credential === undefined) throw new Error(`wecom credential ${config.secretEnv} is not configured`)
@@ -360,6 +362,7 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
       conversations.clear()
       pending.clear()
       recent.clear()
+      await presetScope?.[Symbol.asyncDispose]()
       const failures = disposed.filter(result => result.status === 'rejected')
       if (failures.length > 0) throw new AggregateError(failures.map(result => result.reason as unknown), 'wecom Agent disposal failed')
     }

@@ -3,6 +3,7 @@
 import type { Branded } from '@deepseek-ai/dsh-brand'
 import type { FileAttachmentRef, ImageAttachmentRef } from '@deepseek-ai/dsh-attachment/types'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
+import type { ContextFormed } from '@deepseek-ai/dsh-llm'
 
 /** Stable person or AI identity. */
 export type ParticipantId = Branded<'ImParticipantId'>
@@ -64,3 +65,10 @@ export interface AgentBinding {
 
 /** The conversation currently in front of an AI; leaving all pages suppresses automatic content admission. */
 export type AgentPage = { kind: 'none' } | { kind: 'group'; id: ConversationId } | { kind: 'contact'; id: ParticipantId }
+
+declare module '@deepseek-ai/dsh-llm' {
+  interface MessageSourceMap {
+    /** Content one IM participant's message admitted into an agent's conversation. */
+    im: { kind: 'im' } & ContextFormed
+  }
+}

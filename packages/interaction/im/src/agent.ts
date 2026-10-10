@@ -227,7 +227,7 @@ export function attachAgent(
       }
       const input = freezeMessage({
         id, role: 'user' as const,
-        source: viewing && sender.kind === 'human' ? { kind: 'user' as const } : { kind: 'plugin' as const, plugin: 'im', form: 'relay' as const },
+        source: viewing && sender.kind === 'human' ? { kind: 'user' as const } : { kind: 'im' as const, form: 'relay' as const },
         content: viewing
           ? [{ type: 'text' as const, text: JSON.stringify({ conversation: message.conversation, sender: sender.id, name: sender.name, text: message.text }) }, ...message.attachments]
           : [{ type: 'text' as const, text: JSON.stringify({ notification, action: 'You may ignore this notification or open its page with im_context.' }) }],

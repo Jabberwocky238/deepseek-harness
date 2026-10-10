@@ -1,9 +1,11 @@
 /**
- * Model-facing `talk` tool: publishes text, images and files into the WeCom
- * chat the calling Session already answers in.
+ * Model-facing `sendfile` tool: delivers attachments into the WeCom chat the
+ * calling Session already answers in.
  *
- * The chat is never named by the model — `ctx.wecom` resolves it from the
- * Session, so a tool call cannot address a conversation the bot is not
+ * Attachments only — the tool has no text parameter, because the ordinary
+ * assistant reply is what the people read, and a second text channel would
+ * duplicate it. The chat is never named by the model: `ctx.wecom` resolves it
+ * from the Session, so a call cannot address a conversation the bot is not
  * connected to. Attachment bytes come from `ctx.fs`, which in a remote
  * deployment is the container's filesystem rather than the host's.
  *
@@ -24,21 +26,17 @@ export const inject = ['tools', 'wecom', 'fs']
 const MAX_FILES = 20
 const MAX_BYTES = 20 * 1024 * 1024
 
-const description = 'Send text, images, or files to the WeCom chat you are talking in. Ordinary assistant text is private; use talk for everything the people in the chat should see. Direct chats need the recipient to have messaged the bot.'
+const description = 'Send files (documents, spreadsheets, presentations, PDFs, images) to the WeCom chat you are talking in. Your ordinary reply text is what the people read; this tool carries attachments only and never text.'
 
 export function apply(ctx: Context): void {
   ctx.tools.register(defineTool({
-    name: 'talk',
+    name: 'sendfile',
     description,
     parameters: {
-      message: {
-        type: 'string',
-        required: true,
-        description: 'Message text; may be empty when sending attachments only.',
-      },
       files: {
         type: 'array',
-        description: 'Workspace files to publish without interpreting their contents.',
+        required: true,
+        description: 'Files to deliver to the chat, in the order they should arrive.',
         items: {
           type: 'object',
           additionalProperties: false,
@@ -59,22 +57,22 @@ export function apply(ctx: Context): void {
         type: 'object',
         additionalProperties: false,
         properties: {
-          text: { type: 'boolean', required: true, description: 'Whether a text message was sent.' },
           files: { type: 'number', required: true, description: 'How many attachments were published.' },
         },
       },
       render: (_args, value) => [{ type: 'text', text: JSON.stringify(value) }],
     },
-    async execute(args: { message: string; files?: { path: string; kind: 'file' | 'image'; media_type?: string }[] }, exec) {
+    async execute(args: { files: { path: string; kind: 'file' | 'image'; media_type?: string }[] }, exec) {
       const agent = exec.agent
-      if (agent === undefined) throw new Error('talk must run as an Agent-bound call')
+      if (agent === undefined) throw new Error('sendfile must run as an Agent-bound call')
       const session = agent.session
-      const requested = args.files ?? []
-      if (requested.length > MAX_FILES) throw new Error(`talk accepts at most ${MAX_FILES} attachments`)
+      const requested = args.files
+      if (requested.length === 0) throw new Error('sendfile needs at least one file')
+      if (requested.length > MAX_FILES) throw new Error(`sendfile accepts at most ${MAX_FILES} attachments`)
       const files: { data: Uint8Array; name: string; kind: 'file' | 'image' }[] = []
       let remaining = MAX_BYTES
       for (const file of requested) {
-        if (file.kind === 'image' && file.media_type === undefined) throw new Error('talk images require media_type')
+        if (file.kind === 'image' && file.media_type === undefined) throw new Error('sendfile images require media_type')
         const cwd = session.header.cwd
         const target = await ctx.fs.resolve(file.path, {
           ...cwd === undefined ? {} : { cwd },
@@ -84,7 +82,7 @@ export function apply(ctx: Context): void {
         remaining -= data.byteLength
         files.push({ data, name: basename(file.path), kind: file.kind })
       }
-      return await ctx.wecom.send(session.id, { text: args.message, files })
+      return await ctx.wecom.send(session.id, { files })
     },
   }))
 }

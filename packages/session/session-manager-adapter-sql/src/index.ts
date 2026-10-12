@@ -22,6 +22,7 @@ import {
   type SessionInteractionQuery,
   type SessionInteractionRecord,
 } from '@deepseek-ai/dsh-session-manager'
+import { decodeRow, decodeRows, rowInteger, rowNullableInteger, rowNullableText, rowText } from './rows.ts'
 import { type JournalMode, openInteractionDatabase } from './schema.ts'
 
 export {
@@ -71,23 +72,6 @@ const INSERT_RECORD = `
     body = excluded.body,
     event = excluded.event
 `
-
-/** One stored row, as SQLite returns it. */
-interface InteractionRow {
-  session_id: string
-  seq: number
-  ordinal: number
-  time: number
-  turn: number | null
-  step: number | null
-  kind: string
-  source_kind: string | null
-  call_id: string | null
-  tool_name: string | null
-  text: string | null
-  body: string
-  event: string | null
-}
 
 /**
  * Apply defaults to authored configuration.
@@ -219,23 +203,29 @@ export class SqliteSessionManager extends SessionManagerBackend {
       sql += ' LIMIT ?'
       values.push(query.limit)
     }
-    const rows = db.prepare(sql).all(...values) as unknown as InteractionRow[]
-    return rows.map((row) => {
+    return decodeRows(db.prepare(sql).all(...values), (row) => {
       const record: SessionInteractionRecord = {
-        sessionId: SessionId(row.session_id),
-        seq: SessionSeq(row.seq),
-        ordinal: row.ordinal,
-        time: row.time,
-        kind: row.kind as SessionInteractionRecord['kind'],
-        body: JSON.parse(row.body) as SessionInteractionRecord['body'],
+        sessionId: SessionId(rowText(row, 'session_id')),
+        seq: SessionSeq(rowInteger(row, 'seq')),
+        ordinal: rowInteger(row, 'ordinal'),
+        time: rowInteger(row, 'time'),
+        kind: rowText(row, 'kind') as SessionInteractionRecord['kind'],
+        body: JSON.parse(rowText(row, 'body')) as SessionInteractionRecord['body'],
       }
-      if (row.source_kind !== null) record.sourceKind = row.source_kind
-      if (row.turn !== null) record.turn = row.turn
-      if (row.step !== null) record.step = row.step
-      if (row.call_id !== null) record.callId = row.call_id
-      if (row.tool_name !== null) record.name = row.tool_name
-      if (row.text !== null) record.text = row.text
-      if (row.event !== null) record.event = row.event
+      const sourceKind = rowNullableText(row, 'source_kind')
+      if (sourceKind !== null) record.sourceKind = sourceKind
+      const turn = rowNullableInteger(row, 'turn')
+      if (turn !== null) record.turn = turn
+      const step = rowNullableInteger(row, 'step')
+      if (step !== null) record.step = step
+      const callId = rowNullableText(row, 'call_id')
+      if (callId !== null) record.callId = callId
+      const name = rowNullableText(row, 'tool_name')
+      if (name !== null) record.name = name
+      const text = rowNullableText(row, 'text')
+      if (text !== null) record.text = text
+      const event = rowNullableText(row, 'event')
+      if (event !== null) record.event = event
       return record
     })
   }
@@ -247,7 +237,7 @@ export class SqliteSessionManager extends SessionManagerBackend {
    */
   private async firstMissingSeq(sessionId: SessionId): Promise<number> {
     const db = await this.handle()
-    const row = db.prepare(`
+    const missing = decodeRow(db.prepare(`
       SELECT MIN(candidate) AS missing FROM (
         SELECT 0 AS candidate
         UNION
@@ -255,8 +245,8 @@ export class SqliteSessionManager extends SessionManagerBackend {
       ) WHERE candidate NOT IN (
         SELECT seq FROM session_interaction WHERE session_id = ?1 AND event IS NOT NULL
       )
-    `).get(sessionId) as unknown as { missing: number | null }
-    return row.missing ?? 0
+    `).get(sessionId), row => rowNullableInteger(row, 'missing'))
+    return missing ?? 0
   }
 
   /**
@@ -271,8 +261,10 @@ export class SqliteSessionManager extends SessionManagerBackend {
     const from = await this.firstMissingSeq(session.id)
     const db = await this.handle()
     const known = new Set(
-      (db.prepare('SELECT seq FROM session_interaction WHERE session_id = ? AND event IS NOT NULL')
-        .all(session.id) as unknown as { seq: number }[]).map(row => row.seq),
+      decodeRows(
+        db.prepare('SELECT seq FROM session_interaction WHERE session_id = ? AND event IS NOT NULL').all(session.id),
+        row => rowInteger(row, 'seq'),
+      ),
     )
     const handle = await persistence.open(session.id, 'read')
     try {
@@ -288,18 +280,18 @@ export class SqliteSessionManager extends SessionManagerBackend {
   /** See {@link SessionManagerBackend.readSession}. */
   override async readSession(sessionId: SessionId): Promise<SessionInteractionLog | undefined> {
     const db = await this.handle()
-    const header = db.prepare(
+    const header = decodeRow(db.prepare(
       `SELECT body FROM session_interaction
         WHERE session_id = ? AND kind = 'session-header' ORDER BY seq LIMIT 1`,
-    ).get(sessionId) as unknown as { body: string } | undefined
+    ).get(sessionId), row => rowText(row, 'body'))
     if (header === undefined) return undefined
-    const rows = db.prepare(
+    const events = decodeRows(db.prepare(
       `SELECT event FROM session_interaction
         WHERE session_id = ? AND event IS NOT NULL ORDER BY seq, ordinal`,
-    ).all(sessionId) as unknown as { event: string }[]
+    ).all(sessionId), row => rowText(row, 'event'))
     return {
-      header: JSON.parse(header.body) as SessionInteractionLog['header'],
-      events: rows.map(row => JSON.parse(row.event) as SessionInteractionLog['events'][number]),
+      header: JSON.parse(header) as SessionInteractionLog['header'],
+      events: events.map(event => JSON.parse(event) as SessionInteractionLog['events'][number]),
     }
   }
 

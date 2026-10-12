@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { decodeRow, decodeRows, rowInteger, rowText } from '../src/rows.ts'
 import { SESSION_MANAGER_SQL_SCHEMA_VERSION, openInteractionDatabase } from '../src/schema.ts'
 
 let directory: string
@@ -21,8 +22,14 @@ afterEach(async () => {
 function ledger(storePath = path): { version: number; name: string; applied_at: number }[] {
   const db = new DatabaseSync(storePath)
   try {
-    return db.prepare('SELECT version, name, applied_at FROM schema_migrations ORDER BY version')
-      .all() as unknown as { version: number; name: string; applied_at: number }[]
+    return decodeRows(
+      db.prepare('SELECT version, name, applied_at FROM schema_migrations ORDER BY version').all(),
+      row => ({
+        version: rowInteger(row, 'version'),
+        name: rowText(row, 'name'),
+        applied_at: rowInteger(row, 'applied_at'),
+      }),
+    )
   } finally {
     db.close()
   }
@@ -32,8 +39,7 @@ function ledger(storePath = path): { version: number; name: string; applied_at: 
 function columns(storePath = path): string[] {
   const db = new DatabaseSync(storePath)
   try {
-    const rows = db.prepare('PRAGMA table_info(session_interaction)').all() as unknown as { name: string }[]
-    return rows.map(row => row.name)
+    return decodeRows(db.prepare('PRAGMA table_info(session_interaction)').all(), row => rowText(row, 'name'))
   } finally {
     db.close()
   }
@@ -60,7 +66,7 @@ function seedRow(storePath = path): void {
 function rowCount(storePath = path): number {
   const db = new DatabaseSync(storePath)
   try {
-    return (db.prepare('SELECT count(*) AS n FROM session_interaction').get() as unknown as { n: number }).n
+    return decodeRow(db.prepare('SELECT count(*) AS n FROM session_interaction').get(), row => rowInteger(row, 'n')) ?? 0
   } finally {
     db.close()
   }

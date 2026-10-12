@@ -523,7 +523,7 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
       sendTargets.clear()
       await presetScope?.[Symbol.asyncDispose]()
       const failures = disposed.filter(result => result.status === 'rejected')
-      if (failures.length > 0) throw new AggregateError(failures.map(result => result.reason as unknown), 'wecom Agent disposal failed')
+      if (failures.length > 0) throw new AggregateError(failures.map(result => result.reason), 'wecom Agent disposal failed')
     }
   }, 'wecom connection and conversations')
 }

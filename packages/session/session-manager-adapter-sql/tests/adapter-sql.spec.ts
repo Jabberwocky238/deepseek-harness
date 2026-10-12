@@ -8,6 +8,7 @@ import SessionStore, { Session, SessionId } from '@deepseek-ai/dsh-session'
 import type { SessionInteractionRecord } from '@deepseek-ai/dsh-session-manager'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import SqliteSessionManager from '../src/index.ts'
+import { decodeRows, rowInteger, rowNullableText, rowText } from '../src/rows.ts'
 
 let directory: string
 let path: string
@@ -47,8 +48,16 @@ interface StoredRow {
 function storedRows(storePath = path): StoredRow[] {
   const db = new DatabaseSync(storePath)
   try {
-    return db.prepare('SELECT kind, seq, ordinal, text, source_kind FROM session_interaction ORDER BY seq, ordinal')
-      .all() as unknown as StoredRow[]
+    return decodeRows(
+      db.prepare('SELECT kind, seq, ordinal, text, source_kind FROM session_interaction ORDER BY seq, ordinal').all(),
+      (row): StoredRow => ({
+        kind: rowText(row, 'kind'),
+        seq: rowInteger(row, 'seq'),
+        ordinal: rowInteger(row, 'ordinal'),
+        text: rowNullableText(row, 'text'),
+        source_kind: rowNullableText(row, 'source_kind'),
+      }),
+    )
   } finally {
     db.close()
   }

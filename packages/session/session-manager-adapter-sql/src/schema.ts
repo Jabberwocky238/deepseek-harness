@@ -3,6 +3,7 @@
 import { mkdir, open } from 'node:fs/promises'
 import { dirname, resolve } from 'node:path'
 import type { DatabaseSync } from 'node:sqlite'
+import { decodeRows, rowInteger } from './rows.ts'
 
 /** Application id stored in `PRAGMA application_id`, protecting an unrelated database from this table set. */
 export const SESSION_MANAGER_SQL_APPLICATION_ID = 0x4453484d
@@ -94,8 +95,7 @@ async function createDatabaseFile(path: string): Promise<void> {
 
 /** Versions already recorded in the migration ledger. */
 function migratedVersions(db: DatabaseSync): Set<number> {
-  const rows = db.prepare('SELECT version FROM schema_migrations').all() as unknown as { version: number }[]
-  return new Set(rows.map(row => row.version))
+  return new Set(decodeRows(db.prepare('SELECT version FROM schema_migrations').all(), row => rowInteger(row, 'version')))
 }
 
 /** Record one migration as applied now. */

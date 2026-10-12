@@ -11,6 +11,7 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   SessionManagerCoordinator,
   mapSessionEvent,
+  type SessionInteractionLog,
   type SessionInteractionRecord,
   type SessionManagerSink,
 } from '../src/index.ts'
@@ -31,6 +32,10 @@ class FakeBackend implements SessionManagerSink {
 
   async read(): Promise<SessionInteractionRecord[]> {
     return this.readResult
+  }
+
+  async readSession(): Promise<SessionInteractionLog | undefined> {
+    return undefined
   }
 
   async shutdown(): Promise<void> {
@@ -117,7 +122,7 @@ describe('mapSessionEvent', () => {
       data: {
         turn: 1,
         step: 2,
-        message: createToolResultMessage({ callId, content: [{ type: 'text', text: 'file-a\nfile-b' }] }),
+        message: createToolResultMessage({ callId, content: [{ type: 'text', text: 'file-a\nfile-b' }], isError: false }),
       },
       surfaceOp: 'append',
     })

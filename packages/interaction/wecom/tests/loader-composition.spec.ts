@@ -132,7 +132,8 @@ async function harness(
     maxAttachmentBytes: 20971520, maxAttachmentsPerMessage: 20, attachmentTimeoutMs: 30000,
     maxInputBytes: 16384, maxReplyBytes: 20480, replyIntervalMs: 500,
     runTimeoutMs: 120000, reconnectIntervalMs: 1000, maxReconnectAttempts: 10, maxAuthFailureAttempts: 5, heartbeatIntervalMs: 30000,
-    permissionPreset: 'read-only', wsUrl: `ws://127.0.0.1:${String(address.port)}`, language: 'en', ...overrides,
+    permissionPreset: 'read-only', wsUrl: `ws://127.0.0.1:${String(address.port)}`, language: 'en',
+    inboundDir: '/home/agent/inbox', ...overrides,
   }
   const config = Wecom.Config(rawConfig)
   const dependencies = {

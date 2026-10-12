@@ -351,6 +351,8 @@
     { "path": "./packages/experimental/session-title-all-prompts-llm" },
     { "path": "./packages/session/session-turn-outline" },
     { "path": "./packages/session/session-telemetry" },
+    { "path": "./packages/session/session-manager" },
+    { "path": "./packages/session/session-manager-adapter-sql" },
     { "path": "./packages/identity/anonymous-user-id" },
     { "path": "./packages/session/session-telemetry-otel" },
     { "path": "./packages/core/system-prompt" },

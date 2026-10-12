@@ -38,6 +38,8 @@ The group splits into four families: durable storage (persistence seam, backends
 | [`session-persistence-jsonl/`](session-persistence-jsonl/README.md) | Shipped backend: immutable canonical generation filenames per Session with exclusive successor publication, optionally Zstandard-compressed | registers on `ctx.sessionPersistence` |
 | [`session-checkpoint-policy/`](session-checkpoint-policy/README.md) | Makes model requests, top-level tool side effects, and completed steps durable before the next action | wraps `ctx.llm` and `ctx.tools` |
 | [`session-log-deepseek/`](session-log-deepseek/README.md) | Uploads the incremental canonical log as optional official DeepSeek request metadata | contributes `dsh_session_log` |
+| [`session-manager/`](session-manager/README.md) | Defines the session-interaction record seam and captures committed Session events into it | `ctx.sessionManager` |
+| [`session-manager-adapter-sql/`](session-manager-adapter-sql/README.md) | Shipped backend: one SQLite row per interaction record, with activation-time rebuild of a lost session log | registers on `ctx.sessionManager` |
 
 ### Projection
 

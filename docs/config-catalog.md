@@ -2383,6 +2383,32 @@ export interface PlanModeConfig {
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-plan-mode -->
 
+<!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-playground -->
+<a id="deepseek-aidsh-playground"></a>
+
+## `@deepseek-ai/dsh-playground`
+
+- `source`: [`packages/playground/playground/src/index.ts:12`](../packages/playground/playground/src/index.ts)
+
+```ts config-catalog
+/** Deployment settings for one independently managed Docker namespace. */
+export interface Config {
+  /** Docker Engine Unix socket or Windows named pipe; Docker contexts are not inferred. */
+  socketPath: string
+  /** Persistent ownership label; reuse it after reload to discover the same containers. */
+  namespace: string
+  /** Address returned to SSH clients; must reach the configured published interface. */
+  sshHost: string
+  /** Docker-host IP on which SSH ports are published. */
+  bindAddress: string
+  /** Per-Docker-request timeout in milliseconds. */
+  requestTimeoutMs: number
+  /** Grace period Docker grants a container before killing it during stop. */
+  stopTimeoutSeconds: number
+}
+```
+<!-- END GENERATED config-catalog:@deepseek-ai/dsh-playground -->
+
 <!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-plugin-manager -->
 <a id="deepseek-aidsh-plugin-manager"></a>
 
@@ -2746,6 +2772,36 @@ export interface Config {
 export type SessionLogCompressionLevel = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-session-log-export -->
+
+<!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-session-manager-adapter-sql -->
+<a id="deepseek-aidsh-session-manager-adapter-sql"></a>
+
+## `@deepseek-ai/dsh-session-manager-adapter-sql`
+
+- `inject`: `sessions`
+- `source`: [`packages/session/session-manager-adapter-sql/src/index.ts:34`](../packages/session/session-manager-adapter-sql/src/index.ts)
+
+```ts config-catalog
+/** Backend configuration as authored in `cordis.yml`. */
+export interface Config {
+  /** SQLite database file, or `:memory:` for an ephemeral store. */
+  path: string
+  /** Open the database during activation (`startup`) or on the first record (`never`). */
+  openAt?: 'startup' | 'never'
+  /** SQLite journal mode; `:memory:` ignores it. */
+  journalMode?: JournalMode
+  /**
+   * Session ids to rebuild from the store during activation, before any agent
+   * can resume them. Use it to bring back a session whose canonical log was
+   * lost. Requires a mounted session persistence backend.
+   */
+  restoreSessions?: string[]
+}
+
+/** Supported SQLite journal modes. */
+export type JournalMode = 'wal' | 'delete' | 'truncate' | 'persist'
+```
+<!-- END GENERATED config-catalog:@deepseek-ai/dsh-session-manager-adapter-sql -->
 
 <!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-session-persistence-jsonl -->
 <a id="deepseek-aidsh-session-persistence-jsonl"></a>
@@ -4420,6 +4476,87 @@ export interface Config {
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-webhook-github -->
 
+<!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-wecom -->
+<a id="deepseek-aidsh-wecom"></a>
+
+## `@deepseek-ai/dsh-wecom`
+
+- `inject`: `agents` · `sessions` · `credentials` · `agentDefaultModel` · `permissionPresets` · `attachments` · `sessionProjections` · `tools`
+- `source`: [`packages/interaction/wecom/src/index.ts:44`](../packages/interaction/wecom/src/index.ts)
+
+```ts config-catalog
+/** Connection, admission, and Agent settings for one WeCom bot. */
+export interface Config {
+  /** Bot identifier issued by WeCom. */
+  botId: string
+  /** Credential reference containing the bot secret. */
+  secretEnv: string
+  /** Exact WeCom user ids allowed to invoke the Agent; "*" allows everyone and an empty list denies everyone. */
+  allowedUsers: string[]
+  /** Existing absolute working directory shared by this bot's Agents. */
+  workspacePath: string
+  /** Permission preset applied before the first input is admitted. */
+  permissionPreset: string
+  /** Optional Agent preset; omission uses globally mounted capabilities. */
+  agentPreset?: string
+  /**
+   * Resume each conversation's persisted Session across restarts instead of
+   * starting a fresh one. Off by default: the ids a conversation maps to are
+   * then random and process-local, so a reload begins a new conversation.
+   * Turning this on derives the Session id from the WeCom conversation itself,
+   * so a mounted Session persistence restores the earlier history on the next
+   * start.
+   */
+  resumeConversations?: boolean
+  /** WeCom endpoint; unencrypted connections are permitted only on loopback. */
+  wsUrl: string
+  /** Maximum retained conversations until plugin reload. */
+  maxConversations: number
+  /** Maximum accepted messages across active and queued work. */
+  maxPendingMessages: number
+  /** Number of completed message ids retained for process-local deduplication. */
+  maxRecentMessages: number
+  /** Maximum UTF-8 input bytes admitted to the Agent. */
+  maxInputBytes: number
+  /** Maximum total decrypted attachment bytes admitted from one message. */
+  maxAttachmentBytes: number
+  /**
+   * Absolute directory inside the Agent's own filesystem where inbound
+   * attachments are saved and named in the prompt, so the Agent can open the
+   * bytes with its tools whatever their format is.
+   */
+  inboundDir: string
+  /**
+   * Host-side path bound to {@link inboundDir}. The plugin writes attachments
+   * here; the provider's filesystem has no binary write, so the bytes reach the
+   * container through the deployment's own mount. Omission keeps inbound
+   * attachments in the attachment store only.
+   */
+  inboundHostDir?: string
+  /** Maximum image or file parts admitted from one message. */
+  maxAttachmentsPerMessage: number
+  /** Total attachment download and admission deadline in milliseconds. */
+  attachmentTimeoutMs: number
+  /** Maximum complete reply bytes, including a truncation marker. */
+  maxReplyBytes: number
+  /** Interval in milliseconds for coalescing changed streaming reply text. */
+  replyIntervalMs: number
+  /** Maximum active Agent interval in milliseconds; expiry cancels and drains it. */
+  runTimeoutMs: number
+  /** SDK reconnection base delay in milliseconds. */
+  reconnectIntervalMs: number
+  /** Maximum SDK reconnection attempts. */
+  maxReconnectAttempts: number
+  /** Maximum SDK authentication attempts. */
+  maxAuthFailureAttempts: number
+  /** SDK heartbeat interval in milliseconds. */
+  heartbeatIntervalMs: number
+  /** Language of transport status replies. */
+  language: 'zh' | 'en'
+}
+```
+<!-- END GENERATED config-catalog:@deepseek-ai/dsh-wecom -->
+
 <!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-workflow-ptc -->
 <a id="deepseek-aidsh-workflow-ptc"></a>
 
@@ -4595,6 +4732,7 @@ These load from a `cordis.yml` entry with no `config:` block; they declare no co
 | `@deepseek-ai/dsh-tool-cordis` | `tools` · `cordisInspect` | [`packages/extensions/tool-cordis/src/index.ts`](../packages/extensions/tool-cordis/src/index.ts) |
 | `@deepseek-ai/dsh-tool-schedule` | `tools` | [`packages/schedule/tool-schedule/src/index.ts`](../packages/schedule/tool-schedule/src/index.ts) |
 | `@deepseek-ai/dsh-tool-subagent-control` | `tools` · `subagents` | [`packages/subagent/tool-subagent-control/src/index.ts`](../packages/subagent/tool-subagent-control/src/index.ts) |
+| `@deepseek-ai/dsh-tool-wecom` | `tools` · `wecom` · `fs` | [`packages/interaction/tool-wecom/src/index.ts`](../packages/interaction/tool-wecom/src/index.ts) |
 | `@deepseek-ai/dsh-tool-working-directory` | `tools` · `workingDirectory` | [`packages/session/tool-working-directory/src/index.ts`](../packages/session/tool-working-directory/src/index.ts) |
 | `@deepseek-ai/dsh-user-questions` | — | [`packages/interaction/user-questions/src/index.ts`](../packages/interaction/user-questions/src/index.ts) |
 | `@deepseek-ai/dsh-webhook` | `agents` · `agentDefaultModel` · `agentPresets` · `permissionPresets` · `sessionTitle` · `workspaceRegistry` | [`packages/experimental/webhook/src/index.ts`](../packages/experimental/webhook/src/index.ts) |
@@ -4683,6 +4821,7 @@ Imported as libraries by other packages; a `cordis.yml` cannot load them.
 | `@deepseek-ai/dsh-session-format-v1-to-v2` | — | [`packages/session/session-format-v1-to-v2/src/index.ts`](../packages/session/session-format-v1-to-v2/src/index.ts) |
 | `@deepseek-ai/dsh-session-format-v2-to-v3` | — | [`packages/session/session-format-v2-to-v3/src/index.ts`](../packages/session/session-format-v2-to-v3/src/index.ts) |
 | `@deepseek-ai/dsh-session-format-v3-to-v4` | — | [`packages/session/session-format-v3-to-v4/src/index.ts`](../packages/session/session-format-v3-to-v4/src/index.ts) |
+| `@deepseek-ai/dsh-session-manager` | — | [`packages/session/session-manager/src/index.ts`](../packages/session/session-manager/src/index.ts) |
 | `@deepseek-ai/dsh-session-snapshot` | — | [`packages/test-support/session-snapshot/src/index.ts`](../packages/test-support/session-snapshot/src/index.ts) |
 | `@deepseek-ai/dsh-session-telemetry` | — | [`packages/session/session-telemetry/src/index.ts`](../packages/session/session-telemetry/src/index.ts) |
 | `@deepseek-ai/dsh-session-title-llm` | — | [`packages/session/session-title-llm/src/index.ts`](../packages/session/session-title-llm/src/index.ts) |

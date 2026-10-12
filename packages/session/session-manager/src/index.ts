@@ -107,16 +107,29 @@ export abstract class SessionManagerBackend extends Service implements SessionMa
     super(ctx, 'sessionManager')
   }
 
-  /** See {@link SessionManagerSink.record} — that declaration is the contract's one home. */
+  /**
+   * See {@link SessionManagerSink.record} — that declaration is the contract's one home.
+   * @param records - the batch to store, in source order; owned by the backend after the call.
+   */
   abstract record(records: readonly SessionInteractionRecord[]): Promise<void>
 
-  /** See {@link SessionManagerSink.read}. */
+  /**
+   * See {@link SessionManagerSink.read} — that declaration is the contract's one home.
+   * @param query - which records to read; see {@link SessionInteractionQuery}.
+   * @returns the matching records in identity order.
+   */
   abstract read(query: SessionInteractionQuery): Promise<SessionInteractionRecord[]>
 
-  /** See {@link SessionManagerSink.readSession}. */
+  /**
+   * See {@link SessionManagerSink.readSession} — that declaration is the contract's one home.
+   * @param sessionId - session to read.
+   * @returns the header and events, or undefined when this store never captured the session's header.
+   */
   abstract readSession(sessionId: SessionId): Promise<SessionInteractionLog | undefined>
 
-  /** See {@link SessionManagerSink.shutdown}. */
+  /**
+   * See {@link SessionManagerSink.shutdown} — that declaration is the contract's one home.
+   */
   abstract shutdown(): Promise<void>
 }
 

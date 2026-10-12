@@ -67,10 +67,16 @@ it('rejects failed downloads and corrupt encrypted content', async () => {
   await expect(admitMessageContent(ctx.attachments, [{ msgtype: 'file', file: { ...corrupt, aeskey: Buffer.alloc(32).toString('base64') } }], 100, new AbortController().signal)).rejects.toThrow('Decryption failed')
 })
 
-it('rejects unsupported raster formats before publishing image references', async () => {
+it('delivers an unsupported raster as a file rather than a vision image', async () => {
   await using peer = await mediaPeer()
   const bytes = await sharp({ create: { width: 2, height: 2, channels: 3, background: '#0088ff' } }).tiff().toBuffer()
-  await expect(admitMessageContent(ctx.attachments, [{ msgtype: 'image', image: peer.add(bytes) }], 10000, new AbortController().signal)).rejects.toThrow('unsupported image format')
+  const content = await admitMessageContent(ctx.attachments, [{ msgtype: 'image', image: peer.add(bytes) }], 10000, new AbortController().signal)
+  // WeCom sends image callbacks for formats the model cannot be shown; without an
+  // inbox the attachment store is the only delivery left, so the bytes still reach
+  // the Agent as a readable file.
+  expect(content).toHaveLength(1)
+  expect(content[0]?.type).toBe('file')
+  expect(content.some(part => part.type === 'image')).toBe(false)
 })
 
 it('cancels an outstanding download', async () => {

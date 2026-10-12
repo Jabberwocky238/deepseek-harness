@@ -139,13 +139,27 @@ export const Config: z<Config> = z.object({
 })
 
 const replies = {
-  zh: { attachmentFailed: '附件处理失败，请检查文件大小或重新发送。', processing: '正在处理中…', busy: '当前任务较多，请稍后重试。', failed: '任务未完成，请稍后重试。', timeout: '任务处理超时，已停止。', empty: '本次任务没有文本回复。', large: '消息过长，请缩短后重试。', done: '已发送。' },
-  en: { attachmentFailed: 'The attachment could not be processed. Check its size or send it again.', processing: 'Working…', busy: 'The bot is busy. Please try again later.', failed: 'The task did not complete. Please try again later.', timeout: 'The task timed out and was stopped.', empty: 'This task produced no text reply.', large: 'The message is too long. Please shorten it and try again.', done: 'Sent.' },
+  zh: { attachmentFailed: '附件处理失败，请检查文件大小或重新发送。', processing: '正在处理中…', busy: '当前任务较多，请稍后重试。', failed: '任务未完成，请稍后重试。', timeout: '任务处理超时，已停止。', empty: '本次任务没有文本回复。', large: '消息过长，请缩短后重试。', done: '已发送。', interrupted: '用户打断回复。' },
+  en: { attachmentFailed: 'The attachment could not be processed. Check its size or send it again.', processing: 'Working…', busy: 'The bot is busy. Please try again later.', failed: 'The task did not complete. Please try again later.', timeout: 'The task timed out and was stopped.', empty: 'This task produced no text reply.', large: 'The message is too long. Please shorten it and try again.', done: 'Sent.', interrupted: 'Interrupted by a newer message.' },
+}
+
+/**
+ * The turn currently answering one conversation. A newer inbound message
+ * interrupts it so its unfinished reply block leaves the chat instead of
+ * holding the newest position while the next answer waits behind it.
+ */
+interface ActiveTurn {
+  /** Cancel the answering turn; its block is cleared by {@link ActiveTurn.clear}. */
+  interrupt(): void
+  /** Remove this turn's reply block from the chat. */
+  clear(): Promise<void>
 }
 
 interface Conversation {
   handle?: AgentHandle
   tail: Promise<void>
+  /** The answering turn, present only while one is running. */
+  active?: ActiveTurn | undefined
   /**
    * Session identity derived from this conversation, present only while
    * `resumeConversations` is on. It outlives the process: the same WeCom
@@ -261,7 +275,39 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
       ctx.logger.warn('wecom reply delivery failed')
     }
   }
+  /**
+   * Register this turn as the conversation's answering turn, so a newer message
+   * can cancel it, and keep that registration until the turn unwinds.
+   */
   const run = async (conversation: Conversation, message: InboundMessage, stream: ReturnType<typeof createReplyStream>): Promise<void> => {
+    if (stopped()) return
+    let interrupted = false
+    const turn: ActiveTurn = {
+      interrupt: () => {
+        interrupted = true
+        conversation.handle?.agent.cancel({ kind: 'user' })
+      },
+      // WeCom offers no way to remove a stream block: an empty finish leaves
+      // the block rendering the platform's own streaming status, a zero-width
+      // finish does the same, and emptying the content in a separate live frame
+      // before closing replaces it with platform text. The one behaviour the
+      // platform does honour is a non-empty final content, so the interrupted
+      // turn is closed with a notice that says why it stopped.
+      clear: () => stream.finish(copy.interrupted),
+    }
+    conversation.active = turn
+    try {
+      await answer(conversation, message, stream, () => interrupted)
+    } finally {
+      if (conversation.active === turn) conversation.active = undefined
+    }
+  }
+  const answer = async (
+    conversation: Conversation,
+    message: InboundMessage,
+    stream: ReturnType<typeof createReplyStream>,
+    interrupted: () => boolean,
+  ): Promise<void> => {
     if (stopped()) return
     let content: ContentBlock[]
     try {
@@ -269,7 +315,7 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
       content = await admitMessageContent(ctx.attachments, messageParts(message), config.maxAttachmentBytes, signal, inbox)
     } catch {
       ctx.logger.warn('wecom attachment admission failed')
-      await stream.finish(copy.attachmentFailed)
+      if (!interrupted()) await stream.finish(copy.attachmentFailed)
       return
     }
     if (conversation.handle === undefined) {
@@ -379,6 +425,8 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
       stopStream()
     }
     await ctx.sessions.flush(agent.session)
+    // A newer message already cleared this block and owns the chat now.
+    if (interrupted()) return
     const closing = outcome.timedOut ? copy.timeout : outcome.reason?.kind === 'completed' ? outcome.text || copy.empty : copy.failed
     if (target?.delivered === true && outcome.reason?.kind === 'completed' && outcome.text) {
       // 附件已经是主动消息，排在流式回复之后；文字也发成主动消息，顺序才是
@@ -419,6 +467,11 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
         ...config.resumeConversations ? { sessionId: conversationSessionId(config.botId, key) } : {},
       }
       conversations.set(key, conversation)
+    }
+    const answering = conversation.active
+    if (answering !== undefined) {
+      answering.interrupt()
+      void answering.clear()
     }
     pending.add(body.msgid)
     const owned = conversation

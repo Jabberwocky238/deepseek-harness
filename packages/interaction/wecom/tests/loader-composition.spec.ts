@@ -303,7 +303,29 @@ describe('WeCom through Loader and a real WebSocket', () => {
     expect(h.events.some(row => row.event.type === 'permission/preset')).toBe(true)
   })
 
-  it('serializes pending work and drops duplicate in-flight callbacks', async () => {
+  it('interrupts the answering turn and clears its block when a newer message arrives', async () => {
+    const h = await harness({ replyIntervalMs: 1 })
+    const release = Promise.withResolvers<undefined>()
+    h.model.afterDelta = release.promise
+    cleanups.push(async () => { release.resolve(undefined) })
+    h.send('first')
+    await waitFor(() => { expect(h.updates().some(frame => frame.body?.stream?.content === 'answer 1')).toBe(true) })
+    const interrupted = h.updates()[0]?.body?.stream?.id
+    h.send('second')
+    // The answering turn's block leaves the chat, and the newer answer takes its
+    // own block below it rather than waiting for the cancelled turn to finish.
+    await waitFor(() => {
+      expect(h.replies().some(frame => frame.body?.stream?.id === interrupted && frame.body?.stream?.content === '')).toBe(true)
+    })
+    release.resolve(undefined)
+    await h.waitReplies(2)
+    const blocks = [...new Set(h.updates().map(frame => frame.body?.stream?.id))]
+    expect(blocks).toHaveLength(2)
+    expect(blocks[0]).toBe(interrupted)
+    expect(h.replies().find(frame => frame.body?.stream?.id !== interrupted)?.body?.stream?.content).toBe('answer 2')
+  })
+
+  it('drops a duplicate in-flight callback and answers the newer message alone', async () => {
     const h = await harness()
     const barrier = Promise.withResolvers<undefined>()
     h.model.block = barrier.promise
@@ -315,6 +337,7 @@ describe('WeCom through Loader and a real WebSocket', () => {
     barrier.resolve(undefined)
     await h.waitReplies(2)
     expect(h.replies().map(frame => frame.headers.req_id)).toEqual(['one', 'two'])
+    expect(h.replies()[0]?.body?.stream?.content).toBe('')
     expect(h.model.requests).toHaveLength(2)
   })
 

@@ -2779,7 +2779,7 @@ export type SessionLogCompressionLevel = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9
 ## `@deepseek-ai/dsh-session-manager-adapter-sql`
 
 - `inject`: `sessions`
-- `source`: [`packages/session/session-manager-adapter-sql/src/index.ts:34`](../packages/session/session-manager-adapter-sql/src/index.ts)
+- `source`: [`packages/session/session-manager-adapter-sql/src/index.ts:35`](../packages/session/session-manager-adapter-sql/src/index.ts)
 
 ```ts config-catalog
 /** Backend configuration as authored in `cordis.yml`. */

@@ -23,21 +23,21 @@
 /deepseek-ai-dsh-tool-wecom/model-experience:
   en: 215e7ba838619b7b
   zh: a311da3843709f90
-/deepseek-ai-dsh-tool-wecom/model-experience/registered-tool-and-delivery-result:
-  en: 38cd2e1333c98582
-  zh: 30c7c2097c608e09
-/deepseek-ai-dsh-tool-wecom/model-experience/registered-tool-and-delivery-result/what-the-model-sees:
-  en: 86533f4907d68b26
-  zh: 1930093b18817561
-/deepseek-ai-dsh-tool-wecom/model-experience/registered-tool-and-delivery-result/token-effect:
+/deepseek-ai-dsh-tool-wecom/model-experience/tool-schema-and-delivery-result:
+  en: bdc04152fa627c4c
+  zh: c071bc81a20e91e8
+/deepseek-ai-dsh-tool-wecom/model-experience/tool-schema-and-delivery-result/what-the-model-sees:
+  en: 11da58cf5346998e
+  zh: 8264a29fa364d108
+/deepseek-ai-dsh-tool-wecom/model-experience/tool-schema-and-delivery-result/token-effect:
   en: 9b682d6da3e67a8d
   zh: ec261f28a5d0028b
-/deepseek-ai-dsh-tool-wecom/model-experience/registered-tool-and-delivery-result/kv-cache-effect:
+/deepseek-ai-dsh-tool-wecom/model-experience/tool-schema-and-delivery-result/kv-cache-effect:
   en: 2ebd1697054abd3f
   zh: d48f204acbaefce0
 /deepseek-ai-dsh-tool-wecom/known-limitations-and-deferred-work:
-  en: 9812bec23f538772
-  zh: b6defb2d1100a6f9
+  en: 9b3c635ef53a4cc1
+  zh: 65f8417d540cfad4
 /deepseek-ai-dsh-tool-wecom/known-limitations-and-deferred-work/dev-note:
   en: e67f633dc6fe7773
   zh: 3bb0c20c93f16f98

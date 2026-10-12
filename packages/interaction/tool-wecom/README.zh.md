@@ -53,11 +53,11 @@ kind: "package-reference"
 <a id="model-experience"></a>
 ## 模型体验
 
-### 注册的工具与投递结果
+### 工具 schema 与投递结果
 
 #### 模型看到的内容
 
-注册的 `sendfile` 工具接收必填的 `files` 数组，元素形如 `{ path, kind }`，`kind` 取 `file` 或 `image`，是图片时还必须给 `media_type`（`image/png`、`image/jpeg`、`image/webp` 或 `image/gif`）。它的描述要求发送文档、表格、演示、PDF 和图片，并说明正文由普通回复承载。成功的调用追加一条工具结果，内容为 `{"files":<数量>}`；图片没给媒体类型、列表为空、或路径文件系统提供方读不了时，调用以失败结果结束，其文本点明问题所在。
+模型看到的是 [`sendfile` 的 schema](../../../docs/tool-catalog.zh.md#deepseek-aidsh-tool-wecom)：必填的 `files` 数组，元素形如 `{ path, kind }`，`kind` 取 `file` 或 `image`，是图片时还必须给 `media_type`（`image/png`、`image/jpeg`、`image/webp` 或 `image/gif`）。它的描述要求发送文档、表格、演示、PDF 和图片，并说明正文由普通回复承载。成功的调用追加一条工具结果，内容为 `{"files":<数量>}`；图片没给媒体类型、列表为空、或路径文件系统提供方读不了时，调用以失败结果结束，其文本点明问题所在。
 
 #### Token 影响
 
@@ -78,7 +78,6 @@ kind: "package-reference"
 - **一次调用最多 20 个附件、合计 20 MiB。** 更大的投递要分几次调用，每次调用都各自计入参数和结果。
 - **路径的含义由文件系统提供方决定。** 在远程部署里那个提供方是容器的文件系统，不是宿主机的，所以运维在宿主机上看到的路径，Agent 未必解析得到。
 - **结果是已发布的数量，不是逐收件人投递。** 工具只报告会话接受了多少附件，不说明谁读过。
-- **`sendfile` 不在随包发布的工具目录里。** 工具目录生成器没有点名这个包，所以模型那侧的目录页不记录它，这份 README 也就无法链接过去。
 
 <a id="dev-note"></a>
 ### 开发备注

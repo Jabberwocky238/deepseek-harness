@@ -53,11 +53,11 @@ The returned object carries only the published count. The delivery seam reports 
 <a id="model-experience"></a>
 ## Model Experience
 
-### Registered tool and delivery result
+### Tool schema and delivery result
 
 #### What the model sees
 
-The registered `sendfile` tool takes a required `files` array of `{ path, kind }` entries, where `kind` is `file` or `image` and an image also requires `media_type` (`image/png`, `image/jpeg`, `image/webp`, or `image/gif`). Its description asks for documents, spreadsheets, presentations, PDFs, and images, and states that the ordinary reply carries the text. A successful call appends one tool result holding `{"files":<count>}`; a call that asks for an image without a media type, an empty list, or a path the filesystem provider cannot read fails with an error result whose text names the problem.
+The model sees the [`sendfile` schema](../../../docs/tool-catalog.md#deepseek-aidsh-tool-wecom): a required `files` array of `{ path, kind }` entries, where `kind` is `file` or `image` and an image also requires `media_type` (`image/png`, `image/jpeg`, `image/webp`, or `image/gif`). Its description asks for documents, spreadsheets, presentations, PDFs, and images, and states that the ordinary reply carries the text. A successful call appends one tool result holding `{"files":<count>}`; a call that asks for an image without a media type, an empty list, or a path the filesystem provider cannot read fails with an error result whose text names the problem.
 
 #### Token effect
 
@@ -78,7 +78,6 @@ These limits describe what the tool does not do. They are current constraints, n
 - **One call is capped at 20 attachments and 20 MiB.** A larger delivery is several calls, and each call is charged its own arguments and result.
 - **The filesystem provider decides what a path means.** In a remote deployment that provider is the container's filesystem, not the host's, so a path an operator sees on the host may not resolve for the Agent.
 - **The result is a published count, not per-recipient delivery.** The tool reports what the chat accepted, and says nothing about who read it.
-- **`sendfile` is absent from the shipped tool catalog.** The catalog generator does not name this package, so the model's catalog page does not document the tool and this README cannot link it.
 
 <a id="dev-note"></a>
 ### Dev Note

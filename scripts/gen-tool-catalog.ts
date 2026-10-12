@@ -43,6 +43,7 @@ import SkillRegistry from '@deepseek-ai/dsh-skill'
 import * as SkillFileSystem from '@deepseek-ai/dsh-skill-filesystem'
 import LocalJobRegistry from '@deepseek-ai/dsh-jobs-local'
 import * as ToolAskUser from '@deepseek-ai/dsh-tool-ask-user'
+import * as ToolWecom from '@deepseek-ai/dsh-tool-wecom'
 import * as ToolBash from '@deepseek-ai/dsh-tool-bash'
 import * as ToolPwsh from '@deepseek-ai/dsh-tool-pwsh'
 import * as ToolBashPersistent from '@deepseek-ai/dsh-tool-bash-persistent'
@@ -239,6 +240,21 @@ const TOOL_PACKAGES: ToolPackage[] = [
     },
     note:
       'ask_user_question keeps the original blocking behavior by default; set `mode: timed` to opt into a foreground timeout and pending result while the question remains answerable. In timed mode, `timeout: -1` keeps that call blocking indefinitely.',
+  },
+  {
+    pkg: '@deepseek-ai/dsh-tool-wecom',
+    dir: 'tool-wecom',
+    source: 'packages/interaction/tool-wecom/src/index.ts',
+    requires: ['ctx.tools', 'ctx.wecom', 'ctx.fs'],
+    writes: ['tool/call', 'tool/result', 'attachment delivered to a WeCom chat'],
+    async mount(ctx) {
+      // Schema harvest never delivers: the tool's schema is independent of what a
+      // delivery returns, so the seam only has to exist.
+      ctx.provide('wecom', { send: () => Promise.resolve({ text: false, files: 0 }) })
+      await ctx.plugin(ToolWecom)
+    },
+    note:
+      'sendfile carries attachments only and never names a chat: the delivery seam resolves the target from the Session, so the schema is independent of any bot identity or configuration. The package ships with the fork\'s WeCom plugin, not with a default profile.',
   },
   {
     pkg: '@deepseek-ai/dsh-tools',

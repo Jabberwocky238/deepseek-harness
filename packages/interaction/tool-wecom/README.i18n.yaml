@@ -1,0 +1,43 @@
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write packages/interaction/tool-wecom/README.md
+/:
+  en: a2f9117b5530cb27
+  zh: 2c452fb49090cf03
+/deepseek-ai-dsh-tool-wecom:
+  en: d6346d4b21211e49
+  zh: f90cab611f3e691a
+/deepseek-ai-dsh-tool-wecom/summary:
+  en: 087b27448e9ac157
+  zh: 55de1cfd52c37b11
+/deepseek-ai-dsh-tool-wecom/table-of-contents:
+  en: 76368b6b1da79c80
+  zh: ddafa933c150c4d1
+/deepseek-ai-dsh-tool-wecom/use-this-package:
+  en: c2fac32eddd65307
+  zh: 227f9a93c9e49e17
+/deepseek-ai-dsh-tool-wecom/understand-the-implementation:
+  en: 65cafcb88a6c61b5
+  zh: 5a3924146a17ee42
+/deepseek-ai-dsh-tool-wecom/model-experience:
+  en: 215e7ba838619b7b
+  zh: a311da3843709f90
+/deepseek-ai-dsh-tool-wecom/model-experience/registered-tool-and-delivery-result:
+  en: 38cd2e1333c98582
+  zh: 30c7c2097c608e09
+/deepseek-ai-dsh-tool-wecom/model-experience/registered-tool-and-delivery-result/what-the-model-sees:
+  en: 86533f4907d68b26
+  zh: 1930093b18817561
+/deepseek-ai-dsh-tool-wecom/model-experience/registered-tool-and-delivery-result/token-effect:
+  en: 9b682d6da3e67a8d
+  zh: ec261f28a5d0028b
+/deepseek-ai-dsh-tool-wecom/model-experience/registered-tool-and-delivery-result/kv-cache-effect:
+  en: 2ebd1697054abd3f
+  zh: d48f204acbaefce0
+/deepseek-ai-dsh-tool-wecom/known-limitations-and-deferred-work:
+  en: 9812bec23f538772
+  zh: b6defb2d1100a6f9
+/deepseek-ai-dsh-tool-wecom/known-limitations-and-deferred-work/dev-note:
+  en: e67f633dc6fe7773
+  zh: 3bb0c20c93f16f98

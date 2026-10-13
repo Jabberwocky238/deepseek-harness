@@ -65,7 +65,7 @@ const log = await ctx.sessionManager.readSession(sessionId)   // header plus eve
 | `openAt` | `startup` | Open during activation, or `never` to open on the first record |
 | `restoreSessions` | `[]` | Session ids to rebuild from the store during activation |
 
-Both engines apply the same monotonic migrations; PostgreSQL runs them under an advisory lock, so several processes may share one schema. A store written by a newer build is refused. Each `session/flush` reconciles the store against the canonical log, so events capture missed, and sessions that began before the backend was mounted, are filled from the log. `restoreSessions` rebuilds a listed session's log through the mounted persistence backend; an id with no stored header fails loud, and a session that still has a log is reported and skipped.
+Both engines apply the same monotonic migrations; PostgreSQL runs them under an advisory lock, so several processes may share one schema. A store written by a newer build is refused. Live capture writes each event as it is appended; flushes do no storage work. When a session is announced — created or resumed — the backend reads the session's log through the mounted persistence backend from the event after the last stored one and writes that tail once. The loop logs a resumed session's history and its `session/end-seed` marker before announcing it, and neither passes through `session/event`, so both reach the store the first time the session is opened. A session nobody opens again is not read; a gap in the middle of a stored session, left by a dropped batch, is not repaired. `restoreSessions` rebuilds a listed session's log through the mounted persistence backend; an id with no stored header fails loud, and a session that still has a log is reported and skipped.
 
 -----
 
@@ -84,7 +84,7 @@ Capture is one coordinator per backend, and it is deliberately fork-free: handli
 | [`src/backend.ts`](src/backend.ts) | `SessionManagerBackend`, `SessionManagerSink`, the query and log types, and the `ctx.sessionManager` registration |
 | [`src/records.ts`](src/records.ts) | The record vocabulary and the session-event mapping |
 | [`src/coordinator.ts`](src/coordinator.ts) | Capture, buffering, serialized writes, and disposal |
-| [`src/index.ts`](src/index.ts) | `SqlSessionManager`, the default export: configuration, reconciliation, restore, and shutdown; re-exports the seam |
+| [`src/index.ts`](src/index.ts) | `SqlSessionManager`, the default export: configuration, catch-up on announcement, restore, and shutdown; re-exports the seam |
 | [`src/store.ts`](src/store.ts) | The engine-neutral `InteractionStore` and the shared column and query mapping |
 | [`src/adaptors/sqlite/`](src/adaptors/sqlite/) | SQLite schema, migrations, and store on `node:sqlite` |
 | [`src/adaptors/psql/`](src/adaptors/psql/) | PostgreSQL schema, migrations, and store on `pg`, loaded only with the `postgres` driver |
@@ -130,7 +130,7 @@ None; the package neither assembles nor sends a provider request.
 
 These limits define what the seam does not promise. They are current constraints, not a task backlog.
 
-- **Capture is best-effort by design.** A backend failure is logged and dropped rather than retried, and nothing in the Agent loop waits for storage. A deployment that needs every record has to reconcile against the canonical log.
+- **Capture is best-effort by design.** A backend failure is logged and dropped rather than retried, and nothing in the Agent loop waits for storage. A deployment that needs every record has to compare the store against the canonical log itself.
 - **Mounting is the deployment's decision.** Without a mounted backend there is no `ctx.sessionManager` and capture does not happen.
 - **`readSession` rebuilds only what a backend stored.** It returns nothing when the store never captured the session's header, which happens when the backend was mounted after the session began.
 

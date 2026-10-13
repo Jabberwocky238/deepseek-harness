@@ -65,7 +65,7 @@ const log = await ctx.sessionManager.readSession(sessionId)   // header plus eve
 | `openAt` | `startup` | 激活时打开，或 `never` 表示首次写入时才打开 |
 | `restoreSessions` | `[]` | 激活时要从存储重建的会话 id |
 
-两种引擎执行同一套单调递增的迁移；PostgreSQL 在 advisory lock 下执行，所以多个进程可以共用一个 schema。由更新版本写过的存储会被拒绝。每次 `session/flush` 都会拿规范日志对账，因此采集漏掉的事件、以及后端挂载之前就已开始的会话，都会从日志补齐。`restoreSessions` 通过已挂载的持久化后端重建所列会话的日志；没有已存 header 的 id 会直接报错，仍有日志的会话会被报告并跳过。
+两种引擎执行同一套单调递增的迁移；PostgreSQL 在 advisory lock 下执行，所以多个进程可以共用一个 schema。由更新版本写过的存储会被拒绝。实时采集在每个事件追加时直接写库；flush 不做任何存储工作。会话被发布（新建或恢复）时，后端通过已挂载的持久化后端，从最后一条已存事件之后读取该会话的日志，并把这段尾部写入一次。loop 在发布恢复会话之前就把它的历史和 `session/end-seed` 标记写进日志，而这两者都不经过 `session/event`，所以都会在会话第一次被打开时入库。没人再打开的会话不会被读取；已存会话中间因丢批产生的空缺不会修补。`restoreSessions` 通过已挂载的持久化后端重建所列会话的日志；没有已存 header 的 id 会直接报错，仍有日志的会话会被报告并跳过。
 
 -----
 
@@ -84,7 +84,7 @@ const log = await ctx.sessionManager.readSession(sessionId)   // header plus eve
 | [`src/backend.ts`](src/backend.ts) | `SessionManagerBackend`、`SessionManagerSink`、查询与日志类型，以及 `ctx.sessionManager` 注册 |
 | [`src/records.ts`](src/records.ts) | 记录词汇与会话事件映射 |
 | [`src/coordinator.ts`](src/coordinator.ts) | 采集、缓冲、串行写入与销毁 |
-| [`src/index.ts`](src/index.ts) | 默认导出 `SqlSessionManager`：配置、对账、恢复与关闭；并重新导出 seam |
+| [`src/index.ts`](src/index.ts) | 默认导出 `SqlSessionManager`：配置、发布时补齐、恢复与关闭；并重新导出 seam |
 | [`src/store.ts`](src/store.ts) | 与引擎无关的 `InteractionStore`，以及共用的列与查询映射 |
 | [`src/adaptors/sqlite/`](src/adaptors/sqlite/) | 基于 `node:sqlite` 的 SQLite 表结构、迁移与存储 |
 | [`src/adaptors/psql/`](src/adaptors/psql/) | 基于 `pg` 的 PostgreSQL 表结构、迁移与存储，仅在 `postgres` driver 下加载 |

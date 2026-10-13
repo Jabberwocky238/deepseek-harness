@@ -116,7 +116,7 @@ describe('restore from the interaction store', () => {
       .toContain('thinking')
   })
 
-  it('fills events the live bus never carried', async () => {
+  it('stores a resumed session\'s logged history when the session is announced', async () => {
     const recorder = new Context()
     contexts.push(recorder)
     await recorder.plugin(SessionStore)
@@ -126,21 +126,19 @@ describe('restore from the interaction store', () => {
     converse(session)
     await recorder.sessionPersistence.flush()
     await write.close()
+    const original = await storedLog(recorder)
+    await recorder.fiber.dispose()
 
-    // Mount the recorder only now: it never saw any of those events.
-    provideCredentials(recorder)
-    await recorder.plugin(SqlSessionManager, { path: storePath })
-    expect(await recorder.sessionManager.read({ sessionId: SESSION })).toHaveLength(0)
-
-    await recorder.sessions.flush(session)
+    // A store that never saw the conversation, then the session resumed from its log.
+    const ctx = await boot()
+    ctx.sessions.create(SESSION, { seed: original.events, meta: { ...session.header } })
     await vi.waitFor(async () => {
-      expect((await recorder.sessionManager.read({ sessionId: SESSION })).length).toBeGreaterThan(0)
+      const stored = await ctx.sessionManager.read({ sessionId: SESSION })
+      expect(stored.filter(record => record.event !== undefined).map(record => record.seq))
+        .toEqual(original.events.map(event => event.seq))
     })
-    const stored = await recorder.sessionManager.read({ sessionId: SESSION })
-    // Every appended event is present, so the canonical log can be rebuilt.
-    const log = await storedLog(recorder)
-    const seqs = stored.filter(record => record.event !== undefined).map(record => record.seq)
-    expect(new Set(seqs)).toEqual(new Set(log.events.map(event => event.seq)))
+    const records = await ctx.sessionManager.read({ sessionId: SESSION })
+    expect(records.map(record => record.kind)).toEqual(expect.arrayContaining(['session-header', 'user-message', 'thinking']))
   })
 
   it('fails loud when the store never captured the session header', async () => {

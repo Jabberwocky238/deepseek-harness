@@ -21,14 +21,14 @@
   en: 4faed56708965a4b
   zh: 3880c9e92e7c6bdd
 /deepseek-ai-dsh-session-manager/use-this-package/mount-the-sql-backend:
-  en: 405831c73cbce248
-  zh: b0bc1f9f776416aa
+  en: 6e5f8f39482da406
+  zh: 6780c816169a1e2c
 /deepseek-ai-dsh-session-manager/understand-the-implementation:
   en: 854acd2f025f4362
   zh: 9c07d4cee2f70525
 /deepseek-ai-dsh-session-manager/understand-the-implementation/source-map:
-  en: ac9f37e425b371bc
-  zh: c99e08ff944feb9f
+  en: 166be03daba49ae4
+  zh: efac4d9d30fb17ce
 /deepseek-ai-dsh-session-manager/understand-the-implementation/batching-and-containment:
   en: c235b9b62af2fd7e
   zh: fa02ed89bcc5c0bc
@@ -45,7 +45,7 @@
   en: 7593cf5d0d2cedd6
   zh: 49b4a53892dd8f56
 /deepseek-ai-dsh-session-manager/known-limitations-and-deferred-work:
-  en: 5776d6e71bb152a1
+  en: 5584282cb679805a
   zh: 3680909082066923
 /deepseek-ai-dsh-session-manager/known-limitations-and-deferred-work/dev-note:
   en: e67f633dc6fe7773

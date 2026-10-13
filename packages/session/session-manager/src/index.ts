@@ -15,11 +15,11 @@
 import { Context, Service, type Fiber } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import { credentialRef } from '@deepseek-ai/dsh-credentials'
-import { SessionId, SessionLogOffset, type Session } from '@deepseek-ai/dsh-session'
+import { SessionId, type Session } from '@deepseek-ai/dsh-session'
 import type SessionPersistence from '@deepseek-ai/dsh-session-persistence'
 import { SessionManagerBackend, type SessionInteractionLog, type SessionInteractionQuery } from './backend.ts'
 import { SessionManagerCoordinator } from './coordinator.ts'
-import { eventRecord, type SessionInteractionRecord } from './records.ts'
+import { eventRecord, headerRecord, mapSessionEvent, type SessionInteractionRecord } from './records.ts'
 import type { JournalMode } from './adaptors/sqlite/schema.ts'
 import type { InteractionStore } from './store.ts'
 
@@ -121,12 +121,12 @@ export class SqlSessionManager extends SessionManagerBackend {
       }, 'sessionManagerSql.persistenceBinding')
     })
     ctx.effect(() => () => this.persistenceFiber.dispose(), 'sessionManagerSql.optionalPersistence')
-    // The live event bus does not carry every stored event (a resume appends
-    // `session/end-seed` outside it), so each flush reconciles the store against
-    // the canonical log and fills whatever capture could not see.
-    ctx.on('session/flush', (session: Session) => {
-      void this.reconcile(session).catch((error: unknown) => {
-        this.ctx.logger.warn('session manager: reconciliation failed: %o', error)
+    // The live event bus does not carry every stored event: a resumed session's
+    // history and the `session/end-seed` its constructor appends precede its
+    // announcement. Each announcement writes the tail the store lacks, once.
+    ctx.on('session/created', (session: Session) => {
+      void this.catchUp(session).catch((error: unknown) => {
+        this.ctx.logger.warn('session manager: catching up session %s failed: %o', session.id, error)
       })
     })
     new SessionManagerCoordinator(ctx, this)
@@ -178,25 +178,32 @@ export class SqlSessionManager extends SessionManagerBackend {
   }
 
   /**
-   * Fill the store from the canonical log, starting at the first sequence this
-   * store lacks. Events already stored are skipped so a later reconciliation
-   * never overwrites the interaction rows an earlier capture wrote.
-   * @param session - the flushed session.
+   * Store the logged events of a just-announced session that follow the last
+   * stored one, mapped as live capture maps them, plus its header when nothing
+   * of the session is stored yet. The loop appends a resumed session's history
+   * and its `session/end-seed` marker to the log before announcing it, and
+   * those events never pass through `session/event`. Rows already stored are
+   * kept, so a capture batch landing meanwhile is never overwritten. Without a
+   * mounted persistence backend, or a log for the session, there is nothing to
+   * read.
+   * @param session - the announced session.
    */
-  private async reconcile(session: Session): Promise<void> {
+  private async catchUp(session: Session): Promise<void> {
     const persistence = this.persistence
-    if (persistence === undefined) return
+    if (persistence === undefined || await persistence.stat(session.id) === undefined) return
     const store = await this.store()
-    const from = await store.firstMissingSeq(session.id)
-    const known = new Set(await store.eventSeqs(session.id))
+    const last = await store.lastEventSeq(session.id)
     const handle = await persistence.open(session.id, 'read')
     try {
-      const { events } = await handle.read(SessionLogOffset(from))
-      const missing = events.filter(event => !known.has(event.seq))
-      if (missing.length === 0) return
-      // Capture may land rows for these events after `known` was read; keep
-      // them, since a capture row is richer than the event-only fill.
-      await store.write(missing.map(event => eventRecord(session.id, event)), 'keep')
+      const { events } = await handle.read(last === undefined ? 0 : last + 1)
+      const records: SessionInteractionRecord[] = []
+      const first = events[0]
+      if (last === undefined && first !== undefined) records.push(headerRecord(session.id, handle.header, first.time, first.seq))
+      for (const event of events) {
+        const mapped = mapSessionEvent(session.id, event)
+        records.push(...mapped.length > 0 ? mapped : [eventRecord(session.id, event)])
+      }
+      if (records.length > 0) await store.write(records, 'keep')
     } finally {
       await handle.close()
     }

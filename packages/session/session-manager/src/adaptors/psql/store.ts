@@ -5,7 +5,7 @@
  */
 
 import type { Pool } from 'pg'
-import { decodeRow, decodeRows, rowInteger, rowNullableInteger, rowText } from '../../rows.ts'
+import { decodeRow, decodeRows, rowNullableInteger, rowText } from '../../rows.ts'
 import { type InteractionStore, insertStatement, queryClause, recordFromRow, recordValues } from '../../store.ts'
 import { migrate, quoteIdentifier } from './schema.ts'
 
@@ -88,21 +88,9 @@ export async function openPsqlStore(options: PsqlStoreOptions): Promise<Interact
       const { sql, values } = queryClause(query, n => `$${n}`)
       return decodeRows((await pool.query(`SELECT * FROM ${table}${sql}`, values)).rows, recordFromRow)
     },
-    async firstMissingSeq(sessionId) {
-      const result = await pool.query(`
-        SELECT MIN(candidate) AS missing FROM (
-          SELECT 0::bigint AS candidate
-          UNION
-          SELECT seq + 1 FROM ${table} WHERE session_id = $1 AND event IS NOT NULL
-        ) AS candidates WHERE candidate NOT IN (
-          SELECT seq FROM ${table} WHERE session_id = $1 AND event IS NOT NULL
-        )
-      `, [sessionId])
-      return decodeRow(result.rows[0], row => rowNullableInteger(row, 'missing')) ?? 0
-    },
-    async eventSeqs(sessionId) {
-      const result = await pool.query(`SELECT seq FROM ${table} WHERE session_id = $1 AND event IS NOT NULL`, [sessionId])
-      return decodeRows(result.rows, row => rowInteger(row, 'seq'))
+    async lastEventSeq(sessionId) {
+      const result = await pool.query(`SELECT MAX(seq) AS last FROM ${table} WHERE session_id = $1 AND event IS NOT NULL`, [sessionId])
+      return decodeRow(result.rows[0], row => rowNullableInteger(row, 'last')) ?? undefined
     },
     async header(sessionId) {
       const result = await pool.query(

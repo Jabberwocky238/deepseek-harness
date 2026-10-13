@@ -29,17 +29,11 @@ export interface InteractionStore {
    */
   query(query: SessionInteractionQuery): Promise<SessionInteractionRecord[]>
   /**
-   * Smallest sequence number with no stored event, counting from zero.
+   * Highest sequence number with a stored event.
    * @param sessionId - session to inspect.
-   * @returns the first missing sequence number, or the one after the tail.
+   * @returns that sequence number, or `undefined` when the session has no stored event.
    */
-  firstMissingSeq(sessionId: SessionId): Promise<number>
-  /**
-   * Every sequence number that has a stored event.
-   * @param sessionId - session to inspect.
-   * @returns the sequence numbers, in no particular order.
-   */
-  eventSeqs(sessionId: SessionId): Promise<number[]>
+  lastEventSeq(sessionId: SessionId): Promise<number | undefined>
   /**
    * The stored session header, as its serialized JSON.
    * @param sessionId - session to read.

@@ -5,7 +5,7 @@
  */
 
 import type { SessionId } from '@deepseek-ai/dsh-session'
-import { decodeRow, decodeRows, rowInteger, rowNullableInteger, rowText } from '../../rows.ts'
+import { decodeRow, decodeRows, rowNullableInteger, rowText } from '../../rows.ts'
 import { type JournalMode, openInteractionDatabase } from './schema.ts'
 import { type InteractionStore, insertStatement, queryClause, recordFromRow, recordValues } from '../../store.ts'
 
@@ -48,22 +48,9 @@ export async function openSqliteStore(path: string, journalMode: JournalMode): P
       const { sql, values } = queryClause(query, () => '?')
       return decodeRows(db.prepare(`SELECT * FROM session_interaction${sql}`).all(...values), recordFromRow)
     }),
-    firstMissingSeq: (sessionId: SessionId) => settle(() => {
-      const missing = decodeRow(db.prepare(`
-        SELECT MIN(candidate) AS missing FROM (
-          SELECT 0 AS candidate
-          UNION
-          SELECT seq + 1 FROM session_interaction WHERE session_id = ?1 AND event IS NOT NULL
-        ) WHERE candidate NOT IN (
-          SELECT seq FROM session_interaction WHERE session_id = ?1 AND event IS NOT NULL
-        )
-      `).get(sessionId), row => rowNullableInteger(row, 'missing'))
-      return missing ?? 0
-    }),
-    eventSeqs: sessionId => settle(() => decodeRows(
-      db.prepare('SELECT seq FROM session_interaction WHERE session_id = ? AND event IS NOT NULL').all(sessionId),
-      row => rowInteger(row, 'seq'),
-    )),
+    lastEventSeq: (sessionId: SessionId) => settle(() => decodeRow(db.prepare(
+      'SELECT MAX(seq) AS last FROM session_interaction WHERE session_id = ? AND event IS NOT NULL',
+    ).get(sessionId), row => rowNullableInteger(row, 'last')) ?? undefined),
     header: sessionId => settle(() => decodeRow(db.prepare(
       `SELECT body FROM session_interaction
         WHERE session_id = ? AND kind = 'session-header' ORDER BY seq LIMIT 1`,

@@ -5,9 +5,10 @@
  * login and home directory, and reaches the container over its own OpenSSH
  * alias. The alias is what keeps the login and home apart, not the login the
  * Agent's commands run as: the ssh providers stay the deployment's own, so
- * every conversation's commands execute as that login. Each home is mode 750
- * and belongs to that login's own group, which admits the deployment-wide
- * connection while no other login in the container can read it. Login and home
+ * every conversation's commands execute as that login. Each home is mode 770
+ * with the deployment login's primary group, so that login can work in the
+ * home it uses as the working directory while no other conversation login in
+ * the container can read it. Login and home
  * derive from the conversation key, so they are stable across restarts and
  * match the Session id.
  *

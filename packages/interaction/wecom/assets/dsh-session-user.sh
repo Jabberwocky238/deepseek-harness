@@ -16,7 +16,7 @@ fi
 if [ "$(awk -F: -v u="$user" '$1 == u { print $2 }' /etc/shadow)" != "" ]; then
   passwd -d "$user" >/dev/null
 fi
-# 管理连接要能穿过会话家目录（working-directory / agent-instructions 属 profile 级，用的是管理连接）。
+# 会话的命令以管理登录执行、工作目录就是会话家目录，所以管理登录要能穿过并写入它。
 # 共享组取管理登录自己的主组 —— 不另造组名，也不猜它的名字：该组里只有管理登录，
 # 其它会话用户各自成组、不在其中，所以隔离不受影响。
 if ! id -u "$admin" >/dev/null 2>&1; then
@@ -24,7 +24,7 @@ if ! id -u "$admin" >/dev/null 2>&1; then
   exit 1
 fi
 chgrp "$(id -gn "$admin")" "$home"
-chmod 750 "$home"
+chmod 770 "$home"
 
 install -d -m 700 -o "$user" -g "$user" "$home/.ssh"
 if [ "$#" -gt 0 ]; then cat "$@"; else cat; fi >"$home/.ssh/authorized_keys"

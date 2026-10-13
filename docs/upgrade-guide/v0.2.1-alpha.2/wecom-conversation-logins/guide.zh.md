@@ -11,7 +11,7 @@ description: "会话级企微 bot 的建号脚本多了第三个参数（部署�
 
 影响同时设置了 `sessionHomeRoot` 与 `sessionSshHost` 的企微 bot；单工作区 bot 不受影响。
 
-- 容器内的建号脚本 `dsh-session-user` 原先按 `dsh-session-user <登录名> <家目录>` 调用，并把每个家目录放进写死的 `dsh-admin` 组，再让 `agent` 登录入组。现在按 `dsh-session-user <登录名> <家目录> <部署登录>` 调用：插件从 `sessionSshHost` 的有效连接中读出部署登录，每个家目录的属组改为该登录自己的主组，权限 750。容器里若还是旧脚本，不会报错，但会忽略第三个参数，新建的家目录仍是 `dsh-admin` 组。
+- 容器内的建号脚本 `dsh-session-user` 原先按 `dsh-session-user <登录名> <家目录>` 调用，并把每个家目录放进写死的 `dsh-admin` 组，再让 `agent` 登录入组。现在按 `dsh-session-user <登录名> <家目录> <部署登录>` 调用：插件从 `sessionSshHost` 的有效连接中读出部署登录，每个家目录的属组改为该登录自己的主组，权限 770，部署登录才能在它工作的家目录里写文件。容器里若还是旧脚本，不会报错，但会忽略第三个参数，新建的家目录仍是 `dsh-admin` 组。
 - `wecom` 条目下的 `sessionHelper` 与 `sessionHelperHash` 两个键被删除。它们配置的是插件已不再挂载的按会话 ssh 提供者；`cordis.yml` 里残留的值会被忽略。
 - 会话登录名的入站附件原先存到 `inboundDir`，即挂进容器的宿主目录。现在存到 `<家目录>/inbox/`，归 root 所有、权限 755 与 644，会话能读但不能修改。`inboundDir` 与 `inboundHostDir` 只对单工作区 bot 生效。
 

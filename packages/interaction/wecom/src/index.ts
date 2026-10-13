@@ -3,13 +3,14 @@
 import { createHash, randomUUID } from 'node:crypto'
 import { isAbsolute } from 'node:path'
 import type { Context } from '@deepseek-ai/cordis'
-import type { AgentHandle } from '@deepseek-ai/dsh-agent'
+import type { Agent, AgentHandle } from '@deepseek-ai/dsh-agent'
 import { installModelSelection } from '@deepseek-ai/dsh-agent'
 import type {} from '@deepseek-ai/dsh-agent-default-model'
 import type {} from '@deepseek-ai/dsh-agent-preset-registry'
 import type {} from '@deepseek-ai/dsh-permission-presets'
 import { credentialRef } from '@deepseek-ai/dsh-credentials'
 import type {} from '@deepseek-ai/dsh-attachment'
+import type { SshConnection } from '@deepseek-ai/dsh-ssh'
 import { createUserMessage, type ContentBlock } from '@deepseek-ai/dsh-llm'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import type { TurnEndReason } from '@deepseek-ai/dsh-session'
@@ -20,7 +21,7 @@ import { createReplyStream } from './reply-stream.ts'
 import { admitMessageContent, hostInbox, splitName, type InboundInbox } from './attachments.ts'
 import { sendToChat, type WecomDelivered, type WecomOutbound } from './send.ts'
 import { limitReply, messageSchema, messageParts, type InboundMessage } from './message.ts'
-import { ensureSessionAlias, ensureSessionUser, quoteArgument, resolveSshTarget, sessionIdentity, type SessionIdentity } from './session-user.ts'
+import { ensureSessionUser, quoteArgument, resolveSshTarget, type SessionIdentity } from './session-user.ts'
 import { defaultPrefix, FileStore, isBoxName, normalizePrefix, type WecomFiles } from './file-store.ts'
 
 export type { FileDirection, StoredEntry, WecomFiles } from './file-store.ts'
@@ -59,21 +60,25 @@ export interface Config {
   allowedUsers: string[]
   /**
    * Absolute root under which each conversation gets its own login and home
-   * directory. Configured together with {@link sessionSshHost}, it switches this
-   * bot to one container login per conversation; leaving both unset keeps every
-   * conversation in {@link workspacePath}.
+   * directory. Configured together with {@link sessionSshHost} and
+   * {@link sessionLoginPrefix}, it switches this bot to one container login per
+   * conversation; leaving all three unset keeps every conversation in
+   * {@link workspacePath}.
    */
   sessionHomeRoot?: string
   /**
-   * Deployment-owned OpenSSH alias addressing this bot's container. Each
-   * conversation's alias is generated from it, and its public key is installed
-   * for every conversation's login.
+   * Deployment-owned OpenSSH alias addressing this bot's container; the alias
+   * the deployment's ssh service uses. Its login provisions conversation logins
+   * and its public key is installed for every conversation's login.
    */
   sessionSshHost?: string
-  /** Container-side provisioner creating a conversation's login, home and key. */
+  /**
+   * Login name prefix of this bot's conversation logins, such as the agent's
+   * name; the provisioner appends a four-digit sequence number (`qingang0001`).
+   */
+  sessionLoginPrefix?: string
+  /** Container-side provisioner finding or creating a conversation's login, home and key. */
   sessionUserScript: string
-  /** Host-side OpenSSH include file receiving one alias per conversation. */
-  sessionSshConfig: string
   /** Existing absolute working directory shared by this bot's Agents, in single-workspace mode. */
   workspacePath?: string
   /** Permission preset applied before the first input is admitted. */
@@ -188,8 +193,8 @@ export const Config: z<Config> = z.object({
   allowedUsers: z.array(z.string()).required(),
   sessionHomeRoot: z.string(),
   sessionSshHost: z.string(),
+  sessionLoginPrefix: z.string(),
   sessionUserScript: z.string().default('/usr/local/sbin/dsh-session-user'),
-  sessionSshConfig: z.string().default('~/.ssh/dsh-sessions.conf'),
   workspacePath: z.string(),
   permissionPreset: z.string().required(),
   agentPreset: z.string(),
@@ -252,10 +257,10 @@ interface Conversation {
   handle?: AgentHandle
   tail: Promise<void>
   /**
-   * The conversation's container login and home being created, in
+   * The conversation's container login and home being found or created, in
    * conversation-scoped mode; cleared on failure so the next message retries.
    */
-  provisioned?: Promise<void> | undefined
+  provisioned?: Promise<SessionIdentity> | undefined
   /** The answering turn, present only while one is running. */
   active?: ActiveTurn | undefined
   /**
@@ -267,12 +272,6 @@ interface Conversation {
   id: SessionId
   /** Whether {@link id} is derived, so a persisted Session may be resumed under it. */
   resumable: boolean
-  /**
-   * Container login this conversation works as, present only in
-   * conversation-scoped mode. Derived from the same key as a resumable
-   * {@link id}, so it is stable across restarts too.
-   */
-  identity?: SessionIdentity
 }
 
 /**
@@ -327,32 +326,39 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
   // Only the shape is checked here. The directory belongs to whichever
   // filesystem provider is composed -- a remote SSH provider has no local
   // path to stat, and the provider reports a missing directory on first use.
-  const perConversation = config.sessionHomeRoot !== undefined || config.sessionSshHost !== undefined
+  const perConversation = [config.sessionHomeRoot, config.sessionSshHost, config.sessionLoginPrefix].some(value => value !== undefined)
   if (perConversation) {
-    if (config.sessionHomeRoot === undefined || config.sessionSshHost === undefined) {
-      throw new Error('wecom sessionHomeRoot and sessionSshHost must be configured together')
+    if (config.sessionHomeRoot === undefined || config.sessionSshHost === undefined || config.sessionLoginPrefix === undefined) {
+      throw new Error('wecom sessionHomeRoot, sessionSshHost and sessionLoginPrefix must be configured together')
     }
     if (!isAbsolute(config.sessionHomeRoot)) throw new Error('wecom sessionHomeRoot must be an absolute path')
+    if (!/^[a-z_][a-z0-9_-]{0,27}$/u.test(config.sessionLoginPrefix)) {
+      throw new Error('wecom sessionLoginPrefix must be a lowercase login name of at most 28 characters')
+    }
   } else if (config.workspacePath === undefined) {
-    throw new Error('wecom workspacePath is required unless sessionHomeRoot and sessionSshHost are configured')
+    throw new Error('wecom workspacePath is required unless sessionHomeRoot, sessionSshHost and sessionLoginPrefix are configured')
   } else if (!isAbsolute(config.workspacePath)) {
     throw new Error('wecom workspacePath must be an absolute path')
   }
   if (config.inboundHostDir !== undefined && !(isAbsolute(config.inboundDir) && isAbsolute(config.inboundHostDir))) {
     throw new Error('wecom inbound directories must be absolute paths')
   }
-  // Conversation-scoped bots address their container through generated aliases
-  // that copy this deployment alias, so its effective connection is read once.
-  const sshTarget = config.sessionHomeRoot === undefined || config.sessionSshHost === undefined
-    ? undefined
-    : await resolveSshTarget(config.sessionSshHost)
+  // Conversation logins admit this alias's login to their homes and accept its
+  // key, so its effective connection is read once.
+  const sshTarget = config.sessionSshHost === undefined ? undefined : await resolveSshTarget(config.sessionSshHost)
   // Provisioning runs through the deployment-wide shell provider. `ctx.get`
   // reads the global service store, where the property proxy would not.
   const sessionShell = sshTarget === undefined ? undefined : ctx.get('shell')
   if (sshTarget !== undefined && sessionShell === undefined) {
     throw new Error('wecom: conversation-scoped conversations require a mounted shell provider')
   }
-  const sshConfigPath = config.sessionSshConfig
+  /**
+   * Run deployment-level container work — provisioning, sealing an inbox,
+   * syncing stored files — as the deployment login. The ssh service runs an
+   * initiating Agent's operations as its conversation login, which has no
+   * `sudo`, so this work leaves the initiator boundary it may be called from.
+   */
+  const asDeployment = <T>(operation: () => Promise<T>): Promise<T> => ctx.agents.withoutInitiator(operation)
   // Inbound attachments are published into the Agent's filesystem through a
   // deployment-provided mount, so the plugin writes its host side.
   const sharedInbox = config.inboundHostDir === undefined
@@ -415,7 +421,7 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
    * shell provider: the Agent's filesystem has no binary write, so pulled bytes
    * travel base64-encoded on stdin.
    */
-  const runInWorkdir = async (command: string, stdin: string, workdir: string): Promise<string> => {
+  const runInWorkdir = (command: string, stdin: string, workdir: string): Promise<string> => asDeployment(async () => {
     const shell = ctx.get('shell')
     if (shell === undefined) throw new Error('wecom: pulling stored files requires a mounted shell provider')
     const execution = await shell.execute(shell.resolve({
@@ -431,7 +437,7 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
       throw new Error(`wecom: file sync command failed: ${result.stderr.text.trim() || `exit ${String(result.exitCode)}`}`)
     }
     return result.stdout.text
-  }
+  })
   /**
    * Shell command writing stdin, base64-decoded, to `<directory>/<name>`. A
    * conversation login's home is not writable by the deployment login, so that
@@ -448,20 +454,22 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
     return `sudo -n sh -c ${quoteArgument(script)} sh ${[directory, name, user].map(quoteArgument).join(' ')}`
   }
   /**
-   * Create the conversation's container login, home and OpenSSH alias once.
-   * Both the inbox and the Agent need the home to exist first: an inbox
-   * written before it would leave a root-owned home behind.
+   * Find or create the conversation's container login and home once. Both the
+   * inbox and the Agent need the home to exist first: an inbox written before
+   * it would leave a root-owned home behind.
+   * @returns the conversation's login and home; undefined in single-workspace mode.
    */
-  const provision = (conversation: Conversation): Promise<void> => {
-    const identity = conversation.identity
-    if (identity === undefined || sshTarget === undefined || sessionShell === undefined) return Promise.resolve()
-    conversation.provisioned ??= (async () => {
-      await ensureSessionUser(sessionShell, identity, config.sessionUserScript, sshTarget, config.attachmentTimeoutMs)
-      await ensureSessionAlias(identity, sshTarget, sshConfigPath)
-    })().catch((error: unknown) => {
-      conversation.provisioned = undefined
-      throw error
-    })
+  const provision = (conversation: Conversation): Promise<SessionIdentity | undefined> => {
+    if (sshTarget === undefined || sessionShell === undefined
+      || config.sessionHomeRoot === undefined || config.sessionLoginPrefix === undefined) return Promise.resolve(undefined)
+    const request = {
+      sessionId: conversation.id, prefix: config.sessionLoginPrefix, homeRoot: config.sessionHomeRoot, script: config.sessionUserScript,
+    }
+    conversation.provisioned ??= asDeployment(() => ensureSessionUser(sessionShell, request, sshTarget, config.attachmentTimeoutMs))
+      .catch((error: unknown) => {
+        conversation.provisioned = undefined
+        throw error
+      })
     return conversation.provisioned
   }
   /**
@@ -473,9 +481,7 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
    * host-bound inbox.
    */
   const inboxFor = (conversation: Conversation): InboundInbox | undefined => {
-    const identity = conversation.identity
-    if (identity === undefined) return sharedInbox
-    const directory = `${identity.home}/inbox`
+    if (!perConversation) return sharedInbox
     const script = [
       SEAL_INBOX,
       'n="$2$3"; i=0',
@@ -484,7 +490,8 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
     ].join('\n')
     return {
       publish: async (name, data) => {
-        await provision(conversation)
+        const identity = await provision(conversation) as SessionIdentity
+        const directory = `${identity.home}/inbox`
         const { stem, extension } = splitName(name)
         const command = `sudo -n sh -c ${quoteArgument(script)} sh ${[directory, stem, extension].map(quoteArgument).join(' ')}`
         const written = await runInWorkdir(command, Buffer.from(data).toString('base64'), identity.home)
@@ -626,12 +633,15 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
     }
     if (conversation.handle === undefined) {
       const selection = ctx.agentDefaultModel.currentSelection()
-      const identity = conversation.identity
+      // The login must exist before the Agent's tools reach the container, and
+      // its home is the Agent's working directory.
+      const identity = await provision(conversation)
       const cwd = conversationCwd(config, identity)
-      const setup = async (agentCtx: Context): Promise<void> => {
-        // The login must exist before the Agent's tools reach the container,
-        // and the alias before any of its connections resolve.
-        await provision(conversation)
+      const ssh = identity === undefined ? undefined : ctx.get('ssh')
+      if (identity !== undefined && ssh === undefined) throw new Error('wecom: conversation logins require a mounted ssh service')
+      const setup = async (agentCtx: Context, agent: Agent): Promise<void> => {
+        // Every operation the Agent drives runs as its conversation's login.
+        if (identity !== undefined) agentCtx.effect(() => (ssh as SshConnection).bindLogin(agent, identity.user), 'wecom.sessionLogin')
         await mountPreset?.(agentCtx)
         installModelSelection(agentCtx, { current: selection, assembled: undefined })
       }
@@ -777,9 +787,6 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
         tail: Promise.resolve(),
         id: config.resumeConversations ? conversationSessionId(config.botId, key) : SessionId(`wecom-${randomUUID()}`),
         resumable: config.resumeConversations === true,
-        ...config.sessionHomeRoot === undefined || config.sessionSshHost === undefined
-          ? {}
-          : { identity: sessionIdentity(config.botId, key, config.sessionHomeRoot, config.sessionSshHost) },
       }
       conversations.set(key, conversation)
     }

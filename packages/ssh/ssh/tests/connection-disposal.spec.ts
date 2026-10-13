@@ -111,7 +111,7 @@ async function setup(phase: 'connect' | 'authenticate', pauseControl?: 'forward'
   const ctx = new Context()
   const fiber = ctx.plugin(SshConnection, {
     host: 'hermetic-test', launch: { kind: 'node-script', node: '/usr/bin/node' }, helper: '/opt/dsh/helper.js', helperHash: 'a'.repeat(64), workspace: '/workspace',
-    requestTimeoutMs: 10_000, maxFrameBytes: 4096, maxPending: holdHeartbeat ? 1 : 8, leaseMs: 30_000,
+    requestTimeoutMs: 10_000, maxFrameBytes: 4096, maxPending: holdHeartbeat ? 1 : 8, leaseMs: 30_000, loginIdleMs: 600_000,
   })
   onTestFinished(async () => {
     heartbeat.resolve(null)

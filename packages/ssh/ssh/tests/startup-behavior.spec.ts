@@ -53,7 +53,7 @@ class Child extends EventEmitter {
 
 const config: Config = {
   host: 'test-alias', launch: { kind: 'node-script', node: '/remote/node' }, helper: '/remote/helper.js', helperHash: 'a'.repeat(64), workspace: '/remote/workspace',
-  requestTimeoutMs: 1000, maxFrameBytes: 4096, maxPending: 8, leaseMs: 30_000,
+  requestTimeoutMs: 1000, maxFrameBytes: 4096, maxPending: 8, leaseMs: 30_000, loginIdleMs: 600_000,
 }
 const hello = {
   protocol: 2, hash: 'a'.repeat(64), platform: 'linux', nodeVersion: 'v24.19.0',

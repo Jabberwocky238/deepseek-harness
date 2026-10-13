@@ -3190,7 +3190,7 @@ export interface Config {
 
 ## `@deepseek-ai/dsh-ssh`
 
-- `source`: [`packages/ssh/ssh/src/index.ts:33`](../packages/ssh/ssh/src/index.ts)
+- `source`: [`packages/ssh/ssh/src/index.ts:34`](../packages/ssh/ssh/src/index.ts)
 
 ```ts config-catalog
 /** Deployment-owned SSH identity and installed helper; no model argument selects these values. */
@@ -3213,6 +3213,8 @@ export interface Config {
   maxPending?: number
   /** Remote helper lease; loss of heartbeats starts remote managed cleanup. */
   leaseMs?: number
+  /** Idle time after which a connection opened for a bound login closes; it reopens on the next request. */
+  loginIdleMs?: number
 }
 
 /** Installed helper invocation; script deployments may also install a PTC bootstrap. */
@@ -4493,7 +4495,7 @@ export interface Config {
 ## `@deepseek-ai/dsh-wecom`
 
 - `inject`: `agents` · `sessions` · `credentials` · `agentDefaultModel` · `permissionPresets` · `attachments` · `sessionProjections` · `tools`
-- `source`: [`packages/interaction/wecom/src/index.ts:53`](../packages/interaction/wecom/src/index.ts)
+- `source`: [`packages/interaction/wecom/src/index.ts:54`](../packages/interaction/wecom/src/index.ts)
 
 ```ts config-catalog
 /** Connection, admission, and Agent settings for one WeCom bot. */
@@ -4506,21 +4508,25 @@ export interface Config {
   allowedUsers: string[]
   /**
    * Absolute root under which each conversation gets its own login and home
-   * directory. Configured together with {@link sessionSshHost}, it switches this
-   * bot to one container login per conversation; leaving both unset keeps every
-   * conversation in {@link workspacePath}.
+   * directory. Configured together with {@link sessionSshHost} and
+   * {@link sessionLoginPrefix}, it switches this bot to one container login per
+   * conversation; leaving all three unset keeps every conversation in
+   * {@link workspacePath}.
    */
   sessionHomeRoot?: string
   /**
-   * Deployment-owned OpenSSH alias addressing this bot's container. Each
-   * conversation's alias is generated from it, and its public key is installed
-   * for every conversation's login.
+   * Deployment-owned OpenSSH alias addressing this bot's container; the alias
+   * the deployment's ssh service uses. Its login provisions conversation logins
+   * and its public key is installed for every conversation's login.
    */
   sessionSshHost?: string
-  /** Container-side provisioner creating a conversation's login, home and key. */
+  /**
+   * Login name prefix of this bot's conversation logins, such as the agent's
+   * name; the provisioner appends a four-digit sequence number (`qingang0001`).
+   */
+  sessionLoginPrefix?: string
+  /** Container-side provisioner finding or creating a conversation's login, home and key. */
   sessionUserScript: string
-  /** Host-side OpenSSH include file receiving one alias per conversation. */
-  sessionSshConfig: string
   /** Existing absolute working directory shared by this bot's Agents, in single-workspace mode. */
   workspacePath?: string
   /** Permission preset applied before the first input is admitted. */

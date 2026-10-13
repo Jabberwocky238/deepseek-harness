@@ -44,8 +44,13 @@ kind: "package-reference"
 | `maxFrameBytes` | `67108864` | 每条 JSON 消息的负载上限，最大为 64 MiB |
 | `maxPending` | `128` | 普通未完成请求的数量上限；心跳与有界清理请求使用预留容量 |
 | `leaseMs` | `30000` | 辅助进程心跳租期，范围为 3000 至 600000 毫秒 |
+| `loginIdleMs` | `600000` | 为已绑定登录名打开的连接空闲多久后关闭 |
 
 将验证后的 `ctx.ssh.ptcLaunch` 作为 [`NodePtcRuntime`](../../ptc-runtime/ptc-runtime-node/README.zh.md) 的 `launch` 配置。可执行文件部署包含 worker；脚本部署使用 PTC 时需要两个引导字段，仅使用文件系统和 Bash 时可以省略。脚本引导未配置时，getter 会拒绝访问。客户端在就绪前拒绝不匹配的协议版本、运行形式和 helper 摘要。
+
+### 让某个 Agent 以另一个登录名执行
+
+`ctx.ssh.bindLogin(agent, login)` 让该 Agent 发起的所有操作都在同一别名上以 `login` 执行：服务用 `ssh -l <login> <host>` 另开一条连接，启动该登录名自己的 helper，空闲 `loginIdleMs` 后关闭。Agent 作为当前发起者（`ctx.agents.currentInitiator()`）期间的操作都算它发起的，包括其工具的文件系统、进程与沙箱调用；不在任何发起者之下、或处于 `ctx.agents.withoutInitiator()` 之内的操作，仍以别名自身的登录名执行。进程、终端和文本流始终留在创建它的那条连接上，所以之后的等待或取消会到达拥有它的 helper。请把返回的 disposer 注册为该 Agent 上下文的 effect。远端必须对每个绑定的登录名接受别名所用的密钥，已安装的 helper 也必须能由该登录名执行。
 
 -----
 
@@ -93,6 +98,7 @@ OpenSSH 主连接承载私有管理 RPC。每条程序流使用独立转发的 U
 <a id="known-limitations-and-deferred-work"></a>
 
 - 不提供 Windows 端点、自动配置远端环境、重连或重放。
+- 绑定的登录名只作用于被绑定的 Agent：它创建的子 Agent 仍以别名自身的登录名执行，除非也做了绑定。
 - Web 工作区界面的路径仍假定可访问主机文件系统；请使用 headless 或所有消费方都遵守提供方路径语义的自定义组合。
 - TLS 流密钥不防御远端操作系统级进程内存检查或调试。文件效果策略保留所选沙箱后端的限制。
 

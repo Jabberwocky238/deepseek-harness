@@ -44,8 +44,13 @@ Install an [SSH helper executable archive](../ssh-helper-runtime/README.md), or 
 | `maxFrameBytes` | `67108864` | Per-message JSON payload ceiling, at most 64 MiB |
 | `maxPending` | `128` | Ordinary outstanding requests; heartbeat and bounded cleanup requests have reserved capacity |
 | `leaseMs` | `30000` | Helper heartbeat lease, from 3000 to 600000 ms |
+| `loginIdleMs` | `600000` | Idle time after which a connection opened for a bound login closes |
 
 Pass the verified `ctx.ssh.ptcLaunch` as the `launch` configuration of [`NodePtcRuntime`](../../ptc-runtime/ptc-runtime-node/README.md). Executable deployments include their worker. Script deployments require both bootstrap fields for PTC; filesystem and Bash use may omit them. The getter refuses an unconfigured script bootstrap. The client rejects mismatched protocol versions, runtime kinds and helper digests before readiness.
+
+### Run an Agent's operations as another login
+
+`ctx.ssh.bindLogin(agent, login)` makes every operation that Agent drives run as `login` on the same alias: the service opens a second connection with `ssh -l <login> <host>`, starts that login's own helper, and closes it after `loginIdleMs` without work. An Agent drives an operation while it is the current initiator (`ctx.agents.currentInitiator()`), which covers its tools' filesystem, process and sandbox calls; work outside an initiator, or inside `ctx.agents.withoutInitiator()`, keeps the alias's own login. A process, terminal or text stream stays on the connection that created it, so a later wait or cancellation reaches the helper that owns it. Register the returned disposer as an effect of the Agent's context. The remote host must accept the alias's key for each bound login, and the installed helper must be executable by it.
 
 -----
 
@@ -93,6 +98,7 @@ This provider contributes no request-prefix content. Its consumers own model-vis
 <a id="known-limitations-and-deferred-work"></a>
 
 - No Windows endpoint, automatic provisioning, reconnect or replay is supplied.
+- A bound login covers only the bound Agent: a child Agent it creates runs as the alias's own login unless it is bound too.
 - Web workspace UI paths still assume host filesystem access; use headless or a custom composition whose consumers honor provider paths.
 - TLS stream keys do not protect against remote OS process-memory inspection or debugging. File-effect policy retains the selected sandbox backend’s limits.
 

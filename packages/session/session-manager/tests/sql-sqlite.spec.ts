@@ -5,9 +5,9 @@ import { DatabaseSync } from 'node:sqlite'
 import { Context } from '@deepseek-ai/cordis'
 import { createAssistantMessage, createToolResultMessage, createUserMessage, ToolCallId } from '@deepseek-ai/dsh-llm'
 import SessionStore, { Session, SessionId } from '@deepseek-ai/dsh-session'
-import type { SessionInteractionRecord } from '@deepseek-ai/dsh-session-manager'
+import type { SessionInteractionRecord } from '../src/index.ts'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import SqliteSessionManager from '../src/index.ts'
+import SqlSessionManager from '../src/index.ts'
 import { decodeRows, rowInteger, rowNullableText, rowText } from '../src/rows.ts'
 
 let directory: string
@@ -26,7 +26,7 @@ afterEach(async () => {
 async function setup(storePath = path) {
   const ctx = new Context()
   await ctx.plugin(SessionStore)
-  const fiber = await ctx.plugin(SqliteSessionManager, { path: storePath })
+  const fiber = await ctx.plugin(SqlSessionManager, { path: storePath })
   return { ctx, manager: ctx.sessionManager, fiber }
 }
 
@@ -91,7 +91,7 @@ function appendInteraction(session: Session): void {
   }, { surfaceOp: 'append' })
 }
 
-describe('SqliteSessionManager', () => {
+describe('SqlSessionManager', () => {
   it('stores every interaction kind in the one table', async () => {
     const { ctx } = await setup()
     const session = ctx.sessions.create(SessionId('s-1'), { meta: {} })

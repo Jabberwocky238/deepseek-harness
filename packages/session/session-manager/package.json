@@ -1,6 +1,6 @@
 {
   "name": "@deepseek-ai/dsh-session-manager",
-  "description": "SessionManagerBackend seam for the DeepSeek Harness: one interaction record per session event, covering every thinking block and tool call input and output",
+  "description": "Session interaction recording: the session-manager capability and its SQLite/PostgreSQL storage backend",
   "version": "0.2.1-alpha.2",
   "publishConfig": {
     "access": "public"
@@ -22,7 +22,7 @@
     "./package.json": "./package.json"
   },
   "files": [
-    "lib/index.js",
+    "lib/*.js",
     "lib/types/**/*.d.ts"
   ],
   "license": "MIT",
@@ -30,12 +30,21 @@
     "@deepseek-ai/cordis": "workspace:~",
     "@deepseek-ai/dsh-llm": "workspace:*",
     "@deepseek-ai/dsh-session": "workspace:*",
-    "@deepseek-ai/dsh-util-values": "workspace:*"
+    "@deepseek-ai/dsh-util-values": "workspace:*",
+    "@deepseek-ai/dsh-credentials": "workspace:*"
   },
   "devDependencies": {
     "@deepseek-ai/cordis": "workspace:~",
     "@deepseek-ai/dsh-llm": "workspace:*",
     "@deepseek-ai/dsh-session": "workspace:*",
-    "@deepseek-ai/dsh-util-values": "workspace:*"
+    "@deepseek-ai/dsh-util-values": "workspace:*",
+    "@deepseek-ai/dsh-credentials": "workspace:*",
+    "@deepseek-ai/dsh-session-persistence": "workspace:*",
+    "@deepseek-ai/dsh-session-persistence-jsonl": "workspace:*",
+    "@types/pg": "^8.23.1"
+  },
+  "dependencies": {
+    "@deepseek-ai/schemastery": "workspace:~",
+    "pg": "^8.23.1"
   }
 }

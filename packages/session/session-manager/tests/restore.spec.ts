@@ -6,7 +6,7 @@ import { createAssistantMessage, createUserMessage } from '@deepseek-ai/dsh-llm'
 import SessionStore, { SessionId, type Session, type SessionEvent } from '@deepseek-ai/dsh-session'
 import JsonlSessionPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import SqliteSessionManager from '../src/index.ts'
+import SqlSessionManager from '../src/index.ts'
 
 const SESSION = SessionId('wecom-restore-fixture')
 
@@ -32,7 +32,7 @@ async function boot(restoreSessions?: string[]): Promise<Context> {
   contexts.push(ctx)
   await ctx.plugin(SessionStore)
   await ctx.plugin(JsonlSessionPersistence, { root: sessionsRoot, compression: 'zstd' })
-  await ctx.plugin(SqliteSessionManager, {
+  await ctx.plugin(SqlSessionManager, {
     path: storePath,
     ...restoreSessions === undefined ? {} : { restoreSessions },
   })
@@ -126,7 +126,7 @@ describe('restore from the interaction store', () => {
     await write.close()
 
     // Mount the recorder only now: it never saw any of those events.
-    await recorder.plugin(SqliteSessionManager, { path: storePath })
+    await recorder.plugin(SqlSessionManager, { path: storePath })
     expect(await recorder.sessionManager.read({ sessionId: SESSION })).toHaveLength(0)
 
     await recorder.sessions.flush(session)
@@ -146,7 +146,7 @@ describe('restore from the interaction store', () => {
     const foreign = join(directory, 'empty.sqlite')
     await ctx.plugin(SessionStore)
     await ctx.plugin(JsonlSessionPersistence, { root: sessionsRoot, compression: 'zstd' })
-    await expect(ctx.plugin(SqliteSessionManager, { path: foreign, restoreSessions: ['never-seen'] }))
+    await expect(ctx.plugin(SqlSessionManager, { path: foreign, restoreSessions: ['never-seen'] }))
       .rejects.toThrow(/no stored history for session never-seen/)
   })
 })

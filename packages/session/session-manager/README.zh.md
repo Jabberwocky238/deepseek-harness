@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-`@deepseek-ai/dsh-session-manager` 定义什么是会话交互记录、哪些已提交事件会产生记录、以及后端如何收到它们。一个事件产生零条或多条记录：助手每段思考各成一条记录，每次工具调用和工具结果各成一条，分别带着模型自己产出的参数和工具面向模型的输出。后端只实现 `record`、`read`、`readSession` 和 `shutdown`；采集、批处理和记录词汇由 seam 拥有，连接、表结构、落库批处理与保留策略由后端拥有。随包发布的 [SQLite 后端](../session-manager-adapter-sql/README.zh.md) 把每条记录存成一行。
+`@deepseek-ai/dsh-session-manager` 定义什么是会话交互记录、哪些已提交事件会产生记录、以及后端如何收到它们。一个事件产生零条或多条记录：助手每段思考各成一条记录，每次工具调用和工具结果各成一条，分别带着模型自己产出的参数和工具面向模型的输出。后端只实现 `record`、`read`、`readSession` 和 `shutdown`；采集、批处理和记录词汇由 seam 拥有，连接、表结构、落库批处理与保留策略由后端拥有。本包还以默认导出提供 `SqlSessionManager`，它把每条记录在 SQLite 或 PostgreSQL 里存成一行。
 
 ## 目录
 
@@ -40,6 +40,33 @@ const log = await ctx.sessionManager.readSession(sessionId)   // header plus eve
 
 `(sessionId, seq, ordinal)` 是一条记录的标识。同一个事件被交给后端两次——重新接管的会话、重试的批次——必须写成同样的行而不是重复行，所以每个后端都要把 `record` 当成 upsert。
 
+### 挂载 SQL 后端
+
+`SqlSessionManager` 在 `driver` 选定的引擎上维护一张 `session_interaction` 表。PostgreSQL 通过已挂载的 `credentials` provider 读取连接串，因此密钥不进 `cordis.yml`：
+
+```yaml
+- id: session-manager
+  name: '@deepseek-ai/dsh-session-manager'
+  config:
+    driver: postgres
+    postgres:
+      connectionStringEnv: SESSION_MANAGER_PG_URL   # postgres://user:password@host:port/database
+      schema: dsh_sessions
+```
+
+| 字段 | 默认值 | 含义 |
+|---|---|---|
+| `driver` | `sqlite` | `sqlite` 或 `postgres` |
+| `path` | `sqlite` 时必填 | SQLite 数据库文件，或 `:memory:` 表示临时存储 |
+| `journalMode` | `wal` | SQLite 日志模式；`:memory:` 忽略它 |
+| `postgres.connectionStringEnv` | `postgres` 时必填 | 存放连接串的凭据引用 |
+| `postgres.schema` | `public` | 存放表及其 `schema_migrations` 账本的 schema；不存在时自动创建 |
+| `postgres.maxConnections` | `4` | 连接池大小 |
+| `openAt` | `startup` | 激活时打开，或 `never` 表示首次写入时才打开 |
+| `restoreSessions` | `[]` | 激活时要从存储重建的会话 id |
+
+两种引擎执行同一套单调递增的迁移；PostgreSQL 在 advisory lock 下执行，所以多个进程可以共用一个 schema。由更新版本写过的存储会被拒绝。每次 `session/flush` 都会拿规范日志对账，因此采集漏掉的事件、以及后端挂载之前就已开始的会话，都会从日志补齐。`restoreSessions` 通过已挂载的持久化后端重建所列会话的日志；没有已存 header 的 id 会直接报错，仍有日志的会话会被报告并跳过。
+
 -----
 
 <a id="understand-the-implementation"></a>
@@ -54,9 +81,13 @@ const log = await ctx.sessionManager.readSession(sessionId)   // header plus eve
 
 | 文件 | 职责 |
 |---|---|
-| [`src/index.ts`](src/index.ts) | `SessionManagerBackend`、`SessionManagerSink`、查询与日志类型，以及 `ctx.sessionManager` 注册 |
+| [`src/backend.ts`](src/backend.ts) | `SessionManagerBackend`、`SessionManagerSink`、查询与日志类型，以及 `ctx.sessionManager` 注册 |
 | [`src/records.ts`](src/records.ts) | 记录词汇与会话事件映射 |
 | [`src/coordinator.ts`](src/coordinator.ts) | 采集、缓冲、串行写入与销毁 |
+| [`src/sql.ts`](src/sql.ts) | `SqlSessionManager`：配置、对账、恢复与关闭 |
+| [`src/store.ts`](src/store.ts) | 与引擎无关的 `InteractionStore`，以及共用的列与查询映射 |
+| [`src/adaptors/sqlite/`](src/adaptors/sqlite/) | 基于 `node:sqlite` 的 SQLite 表结构、迁移与存储 |
+| [`src/adaptors/psql/`](src/adaptors/psql/) | 基于 `pg` 的 PostgreSQL 表结构、迁移与存储，仅在 `postgres` driver 下加载 |
 
 ### 批处理与失败隔离
 
@@ -77,7 +108,6 @@ const log = await ctx.sessionManager.readSession(sessionId)   // header plus eve
 
 在选择存储、或把恢复出来的历史接回会话时读这几页。
 
-- [SQLite 后端](../session-manager-adapter-sql/README.zh.md) —— 随包发布的后端及其迁移账本。
 - [会话持久化](../session-persistence/README.zh.md) —— seam 读取、且 `readSession` 要重建的那份规范日志。
 - [Session](../../core/session/README.zh.md) —— 本 seam 观察的事件流。
 
@@ -99,7 +129,7 @@ const log = await ctx.sessionManager.readSession(sessionId)   // header plus eve
 这些限制界定了 seam 不承诺什么。它们是当前的约束，不是待办清单。
 
 - **采集按设计就是尽力而为。** 后端失败只记日志、不重试，Agent loop 里也没有任何环节等存储。要求一条不落落的部署得自己拿规范日志对账。
-- **seam 不带任何后端。** 挂不挂是部署的决定；没有后端就没有 `ctx.sessionManager`，也不会发生采集。
+- **挂不挂后端是部署的决定。** 没有挂载后端就没有 `ctx.sessionManager`，也不会发生采集。
 - **`readSession` 只能重建后端存下来的东西。** 当存储从未采集到该会话的 header（后端在会话开始之后才挂上）时它返回不了任何内容。
 
 <a id="dev-note"></a>

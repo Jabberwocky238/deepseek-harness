@@ -451,7 +451,6 @@
       "@deepseek-ai/dsh-session-log-deepseek": ["./packages/session/session-log-deepseek/src"],
       "@deepseek-ai/dsh-session-log-export": ["./packages/session-query/session-log-export/src"],
       "@deepseek-ai/dsh-session-manager": ["./packages/session/session-manager/src"],
-      "@deepseek-ai/dsh-session-manager-adapter-sql": ["./packages/session/session-manager-adapter-sql/src"],
       "@deepseek-ai/dsh-session-persistence": ["./packages/session/session-persistence/src"],
       "@deepseek-ai/dsh-session-persistence-jsonl": ["./packages/session/session-persistence-jsonl/src"],
       "@deepseek-ai/dsh-session-projection": ["./packages/session/session-projection/src"],

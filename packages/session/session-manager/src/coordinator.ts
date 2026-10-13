@@ -16,7 +16,7 @@
 import type { Context } from '@deepseek-ai/cordis'
 import type { Session, SessionEvent } from '@deepseek-ai/dsh-session'
 import { eventRecord, headerRecord, mapSessionEvent, type SessionInteractionRecord } from './records.ts'
-import type { SessionManagerSink } from './index.ts'
+import type { SessionManagerSink } from './backend.ts'
 
 /**
  * Install interaction capture for one backend.

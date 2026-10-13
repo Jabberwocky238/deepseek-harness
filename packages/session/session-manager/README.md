@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-`@deepseek-ai/dsh-session-manager` defines what a Session interaction record is, which committed events produce one, and how a backend receives them. One event yields zero or more records: every assistant thinking block becomes its own record, and every tool call and tool result becomes one record carrying the model's own arguments and the tool's model-facing output. A backend implements `record`, `read`, `readSession`, and `shutdown`; the seam owns capture, batching, and the vocabulary, and the backend owns connection, schema, batching for its store, and retention. The shipped [SQLite backend](../session-manager-adapter-sql/README.md) stores one row per record.
+`@deepseek-ai/dsh-session-manager` defines what a Session interaction record is, which committed events produce one, and how a backend receives them. One event yields zero or more records: every assistant thinking block becomes its own record, and every tool call and tool result becomes one record carrying the model's own arguments and the tool's model-facing output. A backend implements `record`, `read`, `readSession`, and `shutdown`; the seam owns capture, batching, and the vocabulary, and the backend owns connection, schema, batching for its store, and retention. The package also ships `SqlSessionManager`, its default export, which stores one row per record in SQLite or PostgreSQL.
 
 ## Table of Contents
 
@@ -40,6 +40,33 @@ const log = await ctx.sessionManager.readSession(sessionId)   // header plus eve
 
 `(sessionId, seq, ordinal)` is a record's identity. An event handed to a backend twice — a re-adopted session, a retried batch — must write the same rows instead of duplicating them, so every backend treats `record` as an upsert.
 
+### Mount the SQL backend
+
+`SqlSessionManager` keeps one `session_interaction` table on the engine `driver` selects. PostgreSQL reads its connection string through the mounted `credentials` provider, so the secret stays out of `cordis.yml`:
+
+```yaml
+- id: session-manager
+  name: '@deepseek-ai/dsh-session-manager'
+  config:
+    driver: postgres
+    postgres:
+      connectionStringEnv: SESSION_MANAGER_PG_URL   # postgres://user:password@host:port/database
+      schema: dsh_sessions
+```
+
+| Field | Default | Meaning |
+|---|---|---|
+| `driver` | `sqlite` | `sqlite` or `postgres` |
+| `path` | required with `sqlite` | SQLite database file, or `:memory:` for an ephemeral store |
+| `journalMode` | `wal` | SQLite journal mode; `:memory:` ignores it |
+| `postgres.connectionStringEnv` | required with `postgres` | Credential reference holding the connection string |
+| `postgres.schema` | `public` | Schema holding the table and its `schema_migrations` ledger; created when missing |
+| `postgres.maxConnections` | `4` | Pool size |
+| `openAt` | `startup` | Open during activation, or `never` to open on the first record |
+| `restoreSessions` | `[]` | Session ids to rebuild from the store during activation |
+
+Both engines apply the same monotonic migrations; PostgreSQL runs them under an advisory lock, so several processes may share one schema. A store written by a newer build is refused. Each `session/flush` reconciles the store against the canonical log, so events capture missed, and sessions that began before the backend was mounted, are filled from the log. `restoreSessions` rebuilds a listed session's log through the mounted persistence backend; an id with no stored header fails loud, and a session that still has a log is reported and skipped.
+
 -----
 
 <a id="understand-the-implementation"></a>
@@ -54,9 +81,13 @@ Capture is one coordinator per backend, and it is deliberately fork-free: handli
 
 | File | Role |
 |---|---|
-| [`src/index.ts`](src/index.ts) | `SessionManagerBackend`, `SessionManagerSink`, the query and log types, and the `ctx.sessionManager` registration |
+| [`src/backend.ts`](src/backend.ts) | `SessionManagerBackend`, `SessionManagerSink`, the query and log types, and the `ctx.sessionManager` registration |
 | [`src/records.ts`](src/records.ts) | The record vocabulary and the session-event mapping |
 | [`src/coordinator.ts`](src/coordinator.ts) | Capture, buffering, serialized writes, and disposal |
+| [`src/sql.ts`](src/sql.ts) | `SqlSessionManager`: configuration, reconciliation, restore, and shutdown |
+| [`src/store.ts`](src/store.ts) | The engine-neutral `InteractionStore` and the shared column and query mapping |
+| [`src/adaptors/sqlite/`](src/adaptors/sqlite/) | SQLite schema, migrations, and store on `node:sqlite` |
+| [`src/adaptors/psql/`](src/adaptors/psql/) | PostgreSQL schema, migrations, and store on `pg`, loaded only with the `postgres` driver |
 
 ### Batching and containment
 
@@ -77,7 +108,6 @@ Disposal drains the buffer and then awaits the backend's `shutdown`; a failure t
 
 Read these pages when you are choosing a store or wiring the restored history back into a session.
 
-- [SQLite backend](../session-manager-adapter-sql/README.md) — the shipped backend and its migration ledger.
 - [Session persistence](../session-persistence/README.md) — the canonical log the seam reads and `readSession` rebuilds.
 - [Session](../../core/session/README.md) — the event stream this seam observes.
 
@@ -101,7 +131,7 @@ None; the package neither assembles nor sends a provider request.
 These limits define what the seam does not promise. They are current constraints, not a task backlog.
 
 - **Capture is best-effort by design.** A backend failure is logged and dropped rather than retried, and nothing in the Agent loop waits for storage. A deployment that needs every record has to reconcile against the canonical log.
-- **No backend ships with the seam.** Mounting is the deployment's decision; without a backend there is no `ctx.sessionManager` and capture does not happen.
+- **Mounting is the deployment's decision.** Without a mounted backend there is no `ctx.sessionManager` and capture does not happen.
 - **`readSession` rebuilds only what a backend stored.** It returns nothing when the store never captured the session's header, which happens when the backend was mounted after the session began.
 
 <a id="dev-note"></a>

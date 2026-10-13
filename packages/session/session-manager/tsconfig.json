@@ -22,6 +22,18 @@
     },
     {
       "path": "../../util/values"
+    },
+    {
+      "path": "../../../vendor/schemastery"
+    },
+    {
+      "path": "../session-persistence"
+    },
+    {
+      "path": "../session-persistence-jsonl"
+    },
+    {
+      "path": "../../credentials/credentials"
     }
   ]
 }

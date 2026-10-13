@@ -3,7 +3,7 @@
 import { mkdir, open } from 'node:fs/promises'
 import { dirname, resolve } from 'node:path'
 import type { DatabaseSync } from 'node:sqlite'
-import { decodeRows, rowInteger } from './rows.ts'
+import { decodeRows, rowInteger } from '../../rows.ts'
 
 /** Application id stored in `PRAGMA application_id`, protecting an unrelated database from this table set. */
 export const SESSION_MANAGER_SQL_APPLICATION_ID = 0x4453484d

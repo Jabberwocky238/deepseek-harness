@@ -42,7 +42,7 @@ const log = await ctx.sessionManager.readSession(sessionId)   // header plus eve
 
 ### 挂载 SQL 后端
 
-`SqlSessionManager` 在 `driver` 选定的引擎上维护一张 `session_interaction` 表。PostgreSQL 通过已挂载的 `credentials` provider 读取连接串，因此密钥不进 `cordis.yml`：
+`SqlSessionManager` 在 `driver` 选定的引擎上维护一张 `session_interaction` 表。它在 `sessions` 和 `credentials` 都挂载后才激活；PostgreSQL 通过 `credentials` 读取连接串，因此密钥不进 `cordis.yml`：
 
 ```yaml
 - id: session-manager

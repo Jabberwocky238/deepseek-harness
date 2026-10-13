@@ -42,7 +42,7 @@ const log = await ctx.sessionManager.readSession(sessionId)   // header plus eve
 
 ### Mount the SQL backend
 
-`SqlSessionManager` keeps one `session_interaction` table on the engine `driver` selects. PostgreSQL reads its connection string through the mounted `credentials` provider, so the secret stays out of `cordis.yml`:
+`SqlSessionManager` keeps one `session_interaction` table on the engine `driver` selects. It activates once `sessions` and `credentials` are mounted; PostgreSQL reads its connection string through `credentials`, so the secret stays out of `cordis.yml`:
 
 ```yaml
 - id: session-manager

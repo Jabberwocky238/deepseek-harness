@@ -8,6 +8,7 @@ import SessionStore, { Session, SessionId } from '@deepseek-ai/dsh-session'
 import type { SessionInteractionRecord } from '../src/index.ts'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import SqlSessionManager from '../src/index.ts'
+import { provideCredentials } from './credentials.ts'
 import { decodeRows, rowInteger, rowNullableText, rowText } from '../src/rows.ts'
 
 let directory: string
@@ -26,6 +27,7 @@ afterEach(async () => {
 async function setup(storePath = path) {
   const ctx = new Context()
   await ctx.plugin(SessionStore)
+  provideCredentials(ctx)
   const fiber = await ctx.plugin(SqlSessionManager, { path: storePath })
   return { ctx, manager: ctx.sessionManager, fiber }
 }

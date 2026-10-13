@@ -81,7 +81,7 @@ function resolveConfig(config: Config): ResolvedConfig {
 
 /** SQL owner of the `ctx.sessionManager` service. */
 export class SqlSessionManager extends SessionManagerBackend {
-  static inject = ['sessions']
+  static inject = ['sessions', 'credentials']
 
   static Config: z<Config> = z.object({
     driver: z.union(['sqlite', 'postgres'] as const).default('sqlite'),
@@ -155,9 +155,7 @@ export class SqlSessionManager extends SessionManagerBackend {
       const { openSqliteStore } = await import('./adaptors/sqlite/store.ts')
       return openSqliteStore(config.path, config.journalMode)
     }
-    const credentials = this.ctx.get('credentials')
-    if (credentials === undefined) throw new Error('session manager: the postgres driver requires a mounted credentials provider')
-    const credential = await credentials.resolve(credentialRef(config.postgres.connectionStringEnv))
+    const credential = await this.ctx.credentials.resolve(credentialRef(config.postgres.connectionStringEnv))
     if (credential === undefined) throw new Error(`session manager: credential ${config.postgres.connectionStringEnv} is not configured`)
     const { openPsqlStore } = await import('./adaptors/psql/store.ts')
     return openPsqlStore({

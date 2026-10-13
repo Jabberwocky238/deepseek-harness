@@ -6,6 +6,7 @@ import pg from 'pg'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import SqlSessionManager, { SESSION_MANAGER_SQL_SCHEMA_VERSION, type SessionInteractionRecord } from '../src/index.ts'
 import { openPsqlStore } from '../src/adaptors/psql/store.ts'
+import { provideCredentials } from './credentials.ts'
 
 /**
  * PostgreSQL runs only against a real server: set DSH_TEST_POSTGRES_URL to a
@@ -34,9 +35,7 @@ afterEach(async () => {
 async function setup(connection: string | null = url ?? null, openAt: 'startup' | 'never' = 'startup') {
   const ctx = new Context()
   await ctx.plugin(SessionStore)
-  ctx.provide('credentials', {
-    resolve: async () => connection === null ? undefined : { value: connection, source: 'test' },
-  } as never)
+  provideCredentials(ctx, connection ?? undefined)
   const fiber = await ctx.plugin(SqlSessionManager, {
     driver: 'postgres',
     postgres: { connectionStringEnv: 'DSH_TEST_PG', schema, maxConnections: 2 },
@@ -137,6 +136,7 @@ describe('SqlSessionManager configuration', () => {
   it('requires the engine-specific fields when the plugin loads', async () => {
     const ctx = new Context()
     await ctx.plugin(SessionStore)
+    provideCredentials(ctx)
     await expect(ctx.plugin(SqlSessionManager, { driver: 'postgres' })).rejects.toThrow(/requires postgres.connectionStringEnv/)
     await expect(ctx.plugin(SqlSessionManager, {})).rejects.toThrow(/requires path/)
   })

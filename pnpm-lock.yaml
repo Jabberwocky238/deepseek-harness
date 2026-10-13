@@ -10520,12 +10520,27 @@ importers:
 
   packages/interaction/wecom:
     dependencies:
+      '@deepseek-ai/dsh-bash-sandbox':
+        specifier: workspace:^
+        version: link:../../shell/bash-sandbox
       '@deepseek-ai/dsh-brand':
         specifier: workspace:^
         version: link:../../util/brand
+      '@deepseek-ai/dsh-fs-ssh':
+        specifier: workspace:^
+        version: link:../../ssh/fs-ssh
       '@deepseek-ai/dsh-llm':
         specifier: workspace:^
         version: link:../../llm/llm
+      '@deepseek-ai/dsh-sandbox-ssh':
+        specifier: workspace:^
+        version: link:../../ssh/sandbox-ssh
+      '@deepseek-ai/dsh-ssh':
+        specifier: workspace:^
+        version: link:../../ssh/ssh
+      '@deepseek-ai/dsh-subprocess-ssh':
+        specifier: workspace:^
+        version: link:../../ssh/subprocess-ssh
       '@deepseek-ai/dsh-util-values':
         specifier: workspace:^
         version: link:../../util/values

@@ -24,6 +24,18 @@ Chat with an Agent from WeCom using an intelligent bot with a long connection. C
 
 Mount this plugin in a profile that provides Agents, credentials, a default model, Sessions, permission presets, and attachment storage. See the [WeCom guide](../../../docs/user/guide/wecom.md) and the [optional overlay](../../../apps/cli/config/examples/wecom/cordis.yml). The [configuration catalog](../../../docs/config-catalog.md#deepseek-aidsh-wecom) owns the complete field reference.
 
+### One container login per conversation
+
+By default every conversation of a bot works in the single directory named by `workspacePath`. Setting `sessionHomeRoot` and `sessionSshHost` together switches the bot to an ordinary Linux layout instead: each conversation gets its own login (`u_<name>_<hash>`, derived from the same key as its Session id), its own home directory under `sessionHomeRoot`, and its own OpenSSH alias generated from `sessionSshHost`. The plugin mounts the ssh providers inside each Agent's own isolated scope, so that Agent talks to the container as its own login and cannot read another conversation's home.
+
+The container provides the provisioner shipped in `assets/`, installed as root:
+
+```sh
+install -m 755 assets/dsh-session-user.sh /usr/local/sbin/dsh-session-user
+```
+
+It creates the login, unlocks it (the image's own `agent` account carries an empty password field, which `UsePAM no` requires), installs `sessionSshHost`'s public key, and admits the logins to sshd (`AllowUsers agent u_*`) plus a container-local `dsh-admin` group, so the deployment-wide connection traverses a home without letting one conversation read another's.
+
 Set `allowedUsers` to exact user IDs or `['*']` to allow everyone who can reach the bot; an empty list denies everyone. Allowed users can send text, images, mixed text and images, or files in a direct conversation or through group bot interaction. Direct history is keyed by user; group history is keyed by group and user. The plugin submits one message at a time per conversation and opens a reply with “Working…” (`en`) or “正在处理中…” (`zh`). Text previews replace that reply during generation; the final update contains the last committed assistant text in its activity interval. Other conversations run independently.
 
 Mount multiple rows with distinct IDs and bot credentials to run bots together; each instance owns separate conversations and deduplication.
@@ -79,6 +91,7 @@ Ordinary follow-ups append to the existing Session. Preset and model providers o
 - A failed update is logged without rerunning the Agent or retrying that update; subsequent text and the final update are still attempted. Streaming replies have no durable outbox or exactly-once delivery guarantee.
 - All conversations share the configured working directory and capabilities. Separate history does not isolate filesystem changes.
 - Live WeCom authentication and delivery require deployment credentials; local tests use a loopback WeCom server and a scripted model.
+- Logins, homes and their contents live in the container's writable layer: recreating the container drops them, and a deployment that needs them to survive has to mount that path.
 
 <a id="dev-note"></a>
 ### Dev Note

@@ -24,6 +24,18 @@ kind: "package-reference"
 
 在提供 Agent、凭据、默认模型、Session、权限预设及附件存储的 profile 中挂载本插件。参见[企微指南](../../../docs/user/guide/wecom.zh.md)及[可选配置覆盖层](../../../apps/cli/config/examples/wecom/cordis.yml)。[配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-wecom)定义完整字段。
 
+### 每个会话一个容器登录
+
+默认情况下，一个 bot 的所有会话都在 `workspacePath` 指定的同一个目录里工作。同时配置 `sessionHomeRoot` 与 `sessionSshHost` 会把该 bot 切换到普通 Linux 格局：每个会话拿到自己的登录名（`u_<名称>_<哈希>`，与它的 Session id 由同一个键派生）、`sessionHomeRoot` 下自己的家目录，以及从 `sessionSshHost` 生成的自己的 OpenSSH 别名。插件把这些 ssh 提供者挂在每个 Agent 自己的隔离作用域里，因此该 Agent 以自己的登录身份访问容器，读不到别的会话的家目录。
+
+容器侧把 `assets/` 里随包发布的建号脚本装成 root 可执行：
+
+```sh
+install -m 755 assets/dsh-session-user.sh /usr/local/sbin/dsh-session-user
+```
+
+它负责：创建登录名、解锁账号（镜像自带的 `agent` 账号密码字段为空，`UsePAM no` 下是必需的）、装入 `sessionSshHost` 的公钥，并把这些登录名放进 sshd 的 `AllowUsers agent u_*` 与容器本地的 `dsh-admin` 组——后者让部署级连接能穿过家目录，同时不让某个会话读到另一个会话的家目录。
+
 将 `allowedUsers` 设置为准确用户 ID，或使用 `['*']` 允许所有能访问机器人的用户；空列表拒绝所有用户。获准用户可通过单聊或群机器人交互发送文本、图片、图文混排及文件。单聊历史按用户区分，群聊历史按群及用户区分。插件在每个会话中逐条提交消息，并以“Working…”（`en`）或“正在处理中…”（`zh`）开启回复。生成期间用文本预览更新该回复；最终更新包含该活动区间内最后一条已提交的助手文本。不同会话独立执行。
 
 使用不同条目 ID 和机器人凭据挂载多个实例，可同时运行多个机器人；每个实例独立管理会话和去重。
@@ -79,6 +91,7 @@ kind: "package-reference"
 - 更新发送失败会记录日志，不重新执行 Agent 或重试该更新；仍会尝试后续文本和最终更新。流式回复不提供持久发件箱或恰好一次投递保证。
 - 所有会话共享配置的工作目录与能力。历史隔离不代表文件系统变更隔离。
 - 真实企微认证和投递需要部署凭据；本地测试使用回环企微服务器及脚本模型。
+- 登录名、家目录及其内容位于容器的可写层：重建容器即丢失；要求它们存活的部署必须自行挂载该路径。
 
 <a id="dev-note"></a>
 ### 开发备注

@@ -14,7 +14,8 @@
   },
   "files": [
     "lib/index.js",
-    "lib/types/**/*.d.ts"
+    "lib/types/**/*.d.ts",
+    "assets/dsh-session-user.sh"
   ],
   "license": "MIT",
   "peerDependencies": {
@@ -30,14 +31,19 @@
     "@deepseek-ai/dsh-tools": "workspace:^"
   },
   "dependencies": {
+    "@deepseek-ai/dsh-bash-sandbox": "workspace:^",
     "@deepseek-ai/dsh-brand": "workspace:^",
+    "@deepseek-ai/dsh-fs-ssh": "workspace:^",
     "@deepseek-ai/dsh-llm": "workspace:^",
+    "@deepseek-ai/dsh-sandbox-ssh": "workspace:^",
+    "@deepseek-ai/dsh-ssh": "workspace:^",
+    "@deepseek-ai/dsh-subprocess-ssh": "workspace:^",
+    "@deepseek-ai/dsh-util-values": "workspace:^",
     "@deepseek-ai/schemastery": "workspace:^",
     "@wecom/aibot-node-sdk": "1.0.7",
-    "zod": "^4.4.3",
-    "@deepseek-ai/dsh-util-values": "workspace:^",
+    "content-disposition": "^3.0.0",
     "sharp": "^0.35.3",
-    "content-disposition": "^3.0.0"
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@deepseek-ai/cordis": "workspace:^",

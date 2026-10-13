@@ -26,7 +26,7 @@ kind: "package-reference"
 
 ### 每个会话一个容器登录
 
-默认情况下，一个 bot 的所有会话都在 `workspacePath` 指定的同一个目录里工作。同时配置 `sessionHomeRoot`、`sessionSshHost` 与 `sessionLoginPrefix` 会把该 bot 切换到普通 Linux 格局：每个会话拿到自己的登录名（前缀加四位序号，如 `qingang0001`）和 `sessionHomeRoot` 下自己的家目录，家目录就是其 Agent 的工作目录。插件通过 ssh 服务把每个会话的 Agent 绑定到它的登录名，因此 Agent 的命令和文件操作都以该登录名执行，会话登录之间互相读不到家目录。`sessionSshHost` 的部署登录仍负责建号和封存 inbox，这需要 `sudo`；为此每个家目录是 770、属组为该登录的主组。ssh 服务必须使用同一个别名；会话 Agent 创建的子 Agent 以部署登录执行。
+默认情况下，一个 bot 的所有会话都在 `workspacePath` 指定的同一个目录里工作。同时配置 `sessionHomeRoot`、`sessionSshHost` 与 `sessionLoginPrefix` 会把该 bot 切换到普通 Linux 格局：每个会话拿到自己的登录名（前缀加四位序号，如 `qingang0001`）和 `sessionHomeRoot` 下自己的家目录，家目录就是其 Agent 的工作目录。插件通过 ssh 服务把每个会话的 Agent 绑定到它的登录名，因此 Agent 的命令和文件操作都以该登录名执行，会话登录之间互相读不到家目录。`sessionSshHost` 的部署登录仍通过 `sudo` 建号和封存 inbox，并能穿过每个家目录：家目录是 750、属组为该登录的主组；若家目录组可写，sshd 会拒绝该登录的密钥。ssh 服务必须使用同一个别名；会话 Agent 创建的子 Agent 以部署登录执行。
 
 容器侧把 `assets/` 里随包发布的建号脚本装成 root 可执行：
 
@@ -34,7 +34,7 @@ kind: "package-reference"
 install -m 755 assets/dsh-session-user.sh /usr/local/sbin/dsh-session-user
 ```
 
-插件按 `dsh-session-user <会话 id> <登录名前缀> <家目录根> <部署登录>` 运行它，部署密钥的公钥从标准输入读入。它返回 passwd 注释字段记着该 Session id 的登录名，否则在前缀下分配下一个序号（用锁串行化）并把 Session id 记进去；然后解锁账号（镜像自带的登录用户名下密码字段为空，`UsePAM no` 下是必需的）、装入公钥、把家目录的属组设为部署登录的主组并设为 770，最后输出 `ready <登录名> <家目录>`。部署登录是**参数**而非假定的名字：插件从 `sessionSshHost` 的有效连接里读出它。把登录名放进 sshd 的准入名单（例如 `AllowUsers agent qingang????`）属于容器自身的配置，不归这个脚本管。
+插件按 `dsh-session-user <会话 id> <登录名前缀> <家目录根> <部署登录>` 运行它，部署密钥的公钥从标准输入读入。它返回 passwd 注释字段记着该 Session id 的登录名，否则在前缀下分配下一个序号（用锁串行化）并把 Session id 记进去；然后解锁账号（镜像自带的登录用户名下密码字段为空，`UsePAM no` 下是必需的）、装入公钥、把家目录的属组设为部署登录的主组并设为 750，最后输出 `ready <登录名> <家目录>`。部署登录是**参数**而非假定的名字：插件从 `sessionSshHost` 的有效连接里读出它。把登录名放进 sshd 的准入名单（例如 `AllowUsers agent qingang????`）属于容器自身的配置，不归这个脚本管。
 
 会话登录名的入站附件发布到 `<家目录>/inbox/`，提示里给出的也是这个路径。插件在登录名建好之后，经部署级 shell 以 root 写入：目录归 root、权限 755，每个文件归 root、权限 644，所以会话能读自己的附件，但不能修改或删除；同名文件会另存为 `report-1.docx` 这样的兄弟文件。`inboundDir` 与 `inboundHostDir` 只对单工作区的 bot 生效。
 

@@ -47,11 +47,12 @@ home="$(getent passwd "$user" | cut -d: -f6)"
 if [ "$(awk -F: -v u="$user" '$1 == u { print $2 }' /etc/shadow)" != "" ]; then
   passwd -d "$user" >/dev/null
 fi
-# 会话的命令以会话自己的登录执行；管理登录仍要能穿过并写入家目录（写只读 inbox、
-# 读 profile 级的 working-directory / agent-instructions）。共享组取管理登录自己的主组 ——
+# 会话的命令以会话自己的登录执行；管理登录只需穿过家目录（profile 级的
+# working-directory / agent-instructions 用管理连接），写 inbox 走 sudo。家目录不能组可写：
+# sshd 的 StrictModes 会因此拒绝其中的 authorized_keys。共享组取管理登录自己的主组 ——
 # 不另造组名，也不猜它的名字：该组里只有管理登录，其它会话用户各自成组、不在其中。
 chgrp "$(id -gn "$admin")" "$home"
-chmod 770 "$home"
+chmod 750 "$home"
 
 install -d -m 700 -o "$user" -g "$user" "$home/.ssh"
 if [ "$#" -gt 0 ]; then cat "$@"; else cat; fi >"$home/.ssh/authorized_keys"

@@ -7,9 +7,9 @@
  * container-side provisioner allocates the login as a prefix plus a four-digit
  * sequence number (`qingang0001`) and records the Session id in the login's
  * passwd comment field, so the same conversation finds the same login across
- * restarts. Each home is mode 770 with the deployment login's primary group, so
- * the deployment login can still seal the conversation's inbox, while no other
- * conversation login in the container can read it.
+ * restarts. Each home is mode 750 with the deployment login's primary group, so
+ * the deployment login traverses it while no other conversation login in the
+ * container can read it; sshd refuses a group-writable home's keys.
  *
  * @module @deepseek-ai/dsh-wecom/session-user
  */

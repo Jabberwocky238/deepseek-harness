@@ -13,7 +13,7 @@ This affects WeCom bots that set `sessionHomeRoot` and `sessionSshHost`; single-
 
 - Each conversation's Agent ran its commands and file operations as the deployment login. It now runs them as the conversation's own login: the plugin binds the Agent to that login through `ctx.ssh.bindLogin`, which requires the `ssh` service of `@jabberwocky238/dsh-ssh`.
 - Conversation logins were `u_<kind>_<hash>`, derived on the host. They are now `<sessionLoginPrefix><nnnn>`, such as `qingang0001`, allocated in the container; the login's passwd comment field holds the Session id.
-- The provisioner `dsh-session-user` was called as `dsh-session-user <login> <home>`. It is now called as `dsh-session-user <session-id> <login-prefix> <home-root> <deployment-login>` and prints `ready <login> <home>`; each home gets the deployment login's primary group at mode 770.
+- The provisioner `dsh-session-user` was called as `dsh-session-user <login> <home>`. It is now called as `dsh-session-user <session-id> <login-prefix> <home-root> <deployment-login>` and prints `ready <login> <home>`; each home gets the deployment login's primary group at mode 750.
 - `sessionLoginPrefix` is new and required with `sessionHomeRoot`. `sessionSshConfig`, `sessionHelper` and `sessionHelperHash` are removed, and the plugin no longer writes per-conversation OpenSSH aliases; a value left in `cordis.yml` is ignored.
 - Inbound attachments of a conversation login went to `inboundDir`. They now go to `<home>/inbox/`, root-owned at modes 755 and 644.
 

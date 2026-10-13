@@ -168,7 +168,7 @@ export class SqlSessionManager extends SessionManagerBackend {
   /** See {@link SessionManagerBackend.record} — that declaration is the contract's one home. */
   override async record(records: readonly SessionInteractionRecord[]): Promise<void> {
     if (records.length === 0) return
-    await (await this.store()).upsert(records)
+    await (await this.store()).write(records, 'replace')
   }
 
   /** See {@link SessionManagerBackend.read}. */
@@ -193,7 +193,9 @@ export class SqlSessionManager extends SessionManagerBackend {
       const { events } = await handle.read(SessionLogOffset(from))
       const missing = events.filter(event => !known.has(event.seq))
       if (missing.length === 0) return
-      await this.record(missing.map(event => eventRecord(session.id, event)))
+      // Capture may land rows for these events after `known` was read; keep
+      // them, since a capture row is richer than the event-only fill.
+      await store.write(missing.map(event => eventRecord(session.id, event)), 'keep')
     } finally {
       await handle.close()
     }

@@ -6,7 +6,7 @@
 
 import type { Pool } from 'pg'
 import { decodeRow, decodeRows, rowInteger, rowNullableInteger, rowText } from '../../rows.ts'
-import { type InteractionStore, RECORD_COLUMNS, UPDATED_COLUMNS, queryClause, recordFromRow, recordValues } from '../../store.ts'
+import { type InteractionStore, insertStatement, queryClause, recordFromRow, recordValues } from '../../store.ts'
 import { migrate, quoteIdentifier } from './schema.ts'
 
 /** Connection settings for a PostgreSQL store. */
@@ -55,12 +55,6 @@ export async function openPsqlStore(options: PsqlStoreOptions): Promise<Interact
   pool.on('error', () => {})
   const schema = quoteIdentifier(options.schema)
   const table = `${schema}.session_interaction`
-  const insert = `
-    INSERT INTO ${table} (${RECORD_COLUMNS.join(', ')})
-    VALUES (${RECORD_COLUMNS.map((_, index) => `$${index + 1}`).join(', ')})
-    ON CONFLICT (session_id, seq, ordinal) DO UPDATE SET
-      ${UPDATED_COLUMNS.map(column => `${column} = EXCLUDED.${column}`).join(',\n      ')}
-  `
   try {
     const client = await pool.connect()
     try {
@@ -74,7 +68,8 @@ export async function openPsqlStore(options: PsqlStoreOptions): Promise<Interact
   }
   let closed = false
   return {
-    async upsert(records) {
+    async write(records, onConflict) {
+      const insert = insertStatement(table, n => `$${n}`, onConflict)
       const client = await pool.connect()
       try {
         await client.query('BEGIN')

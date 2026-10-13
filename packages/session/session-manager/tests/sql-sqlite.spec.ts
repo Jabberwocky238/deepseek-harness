@@ -9,6 +9,7 @@ import type { SessionInteractionRecord } from '../src/index.ts'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import SqlSessionManager from '../src/index.ts'
 import { provideCredentials } from './credentials.ts'
+import { openSqliteStore } from '../src/adaptors/sqlite/store.ts'
 import { decodeRows, rowInteger, rowNullableText, rowText } from '../src/rows.ts'
 
 let directory: string
@@ -165,6 +166,18 @@ describe('SqlSessionManager', () => {
     expect(storedRows()).toEqual([
       { kind: 'thinking', seq: 9, ordinal: 0, text: 'rewritten', source_kind: 'model' },
     ])
+  })
+
+  it('keeps a stored row when a fill write carries the same identity', async () => {
+    const store = await openSqliteStore(':memory:', 'wal')
+    const rich: SessionInteractionRecord = {
+      sessionId: SessionId('s-6'), seq: 3 as never, ordinal: 0, time: 1,
+      kind: 'user-message', sourceKind: 'user', text: 'hello', body: { text: 'hello' }, event: '{}',
+    }
+    await store.write([rich], 'replace')
+    await store.write([{ ...rich, kind: 'session-event', sourceKind: undefined, text: undefined }], 'keep')
+    expect((await store.query({ sessionId: rich.sessionId })).map(record => record.kind)).toEqual(['user-message'])
+    await store.close()
   })
 
   it('supports an ephemeral store and closes on disposal', async () => {

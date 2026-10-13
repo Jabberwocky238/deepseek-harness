@@ -7,15 +7,7 @@
 import type { SessionId } from '@deepseek-ai/dsh-session'
 import { decodeRow, decodeRows, rowInteger, rowNullableInteger, rowText } from '../../rows.ts'
 import { type JournalMode, openInteractionDatabase } from './schema.ts'
-import { type InteractionStore, RECORD_COLUMNS, UPDATED_COLUMNS, queryClause, recordFromRow, recordValues } from '../../store.ts'
-
-/** Statement text: one row per interaction, upserted on its identity. */
-const INSERT_RECORD = `
-  INSERT INTO session_interaction (${RECORD_COLUMNS.join(', ')})
-  VALUES (${RECORD_COLUMNS.map(() => '?').join(', ')})
-  ON CONFLICT (session_id, seq, ordinal) DO UPDATE SET
-    ${UPDATED_COLUMNS.map(column => `${column} = excluded.${column}`).join(',\n    ')}
-`
+import { type InteractionStore, insertStatement, queryClause, recordFromRow, recordValues } from '../../store.ts'
 
 /**
  * Run a synchronous `node:sqlite` operation behind the asynchronous store
@@ -41,8 +33,8 @@ export async function openSqliteStore(path: string, journalMode: JournalMode): P
   const db = await openInteractionDatabase(path, journalMode)
   let closed = false
   return {
-    upsert: records => settle(() => {
-      const insert = db.prepare(INSERT_RECORD)
+    write: (records, onConflict) => settle(() => {
+      const insert = db.prepare(insertStatement('session_interaction', () => '?', onConflict))
       db.exec('BEGIN')
       try {
         for (const record of records) insert.run(...recordValues(record))

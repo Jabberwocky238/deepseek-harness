@@ -16,11 +16,12 @@ import { rowInteger, rowNullableInteger, rowNullableText, rowText, type StoredRo
  */
 export interface InteractionStore {
   /**
-   * Insert records, replacing a stored row that has the same identity; the
-   * batch commits or fails as one transaction.
+   * Insert records; the batch commits or fails as one transaction.
    * @param records - records to store.
+   * @param onConflict - `replace` overwrites a stored row with the same
+   *   identity; `keep` leaves it and skips the record.
    */
-  upsert(records: readonly SessionInteractionRecord[]): Promise<void>
+  write(records: readonly SessionInteractionRecord[], onConflict: ConflictPolicy): Promise<void>
   /**
    * Read records matching a query, ordered by `(seq, ordinal)`.
    * @param query - session, lower sequence bound, kind and source filters, and limit.
@@ -61,8 +62,25 @@ export const RECORD_COLUMNS = [
   'source_kind', 'call_id', 'tool_name', 'text', 'body', 'event',
 ] as const
 
-/** Columns an upsert overwrites when the identity already exists. */
+/** Columns a `replace` write overwrites when the identity already exists. */
 export const UPDATED_COLUMNS = RECORD_COLUMNS.slice(3)
+
+/** What a write does with a record whose identity is already stored. */
+export type ConflictPolicy = 'replace' | 'keep'
+
+/**
+ * Statement text inserting one record into `table`.
+ * @param table - the table name, already quoted where the engine needs it.
+ * @param placeholder - the engine's placeholder for the 1-based parameter `n`.
+ * @param onConflict - whether a stored row with the same identity is overwritten or kept.
+ * @returns the `INSERT … ON CONFLICT` statement; both engines accept the same syntax.
+ */
+export function insertStatement(table: string, placeholder: (n: number) => string, onConflict: ConflictPolicy): string {
+  const action = onConflict === 'replace'
+    ? `DO UPDATE SET ${UPDATED_COLUMNS.map(column => `${column} = excluded.${column}`).join(', ')}`
+    : 'DO NOTHING'
+  return `INSERT INTO ${table} (${RECORD_COLUMNS.join(', ')}) VALUES (${RECORD_COLUMNS.map((_, index) => placeholder(index + 1)).join(', ')}) ON CONFLICT (session_id, seq, ordinal) ${action}`
+}
 
 /**
  * The parameter values of one record, in {@link RECORD_COLUMNS} order.

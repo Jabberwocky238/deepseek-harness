@@ -98,6 +98,18 @@ describe.skipIf(url === undefined)('SqlSessionManager on PostgreSQL', () => {
     await expect(manager.read({ sessionId: SessionId('pg-2') })).rejects.toThrow('closed')
   })
 
+  it('keeps a stored row when a fill write carries the same identity', async () => {
+    const store = await openPsqlStore({ connectionString: url!, schema, maxConnections: 1 })
+    const rich: SessionInteractionRecord = {
+      sessionId: SessionId('pg-4'), seq: 3 as never, ordinal: 0, time: 1,
+      kind: 'user-message', sourceKind: 'user', text: 'hello', body: { text: 'hello' }, event: '{}',
+    }
+    await store.write([rich], 'replace')
+    await store.write([{ ...rich, kind: 'session-event', sourceKind: undefined, text: undefined }], 'keep')
+    expect((await store.query({ sessionId: rich.sessionId })).map(record => record.kind)).toEqual(['user-message'])
+    await store.close()
+  })
+
   it('lets several processes migrate the same schema at once', async () => {
     const options = { connectionString: url!, schema, maxConnections: 1 }
     const stores = await Promise.all([openPsqlStore(options), openPsqlStore(options), openPsqlStore(options)])

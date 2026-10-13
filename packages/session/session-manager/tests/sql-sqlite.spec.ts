@@ -175,7 +175,7 @@ describe('SqlSessionManager', () => {
       kind: 'user-message', sourceKind: 'user', text: 'hello', body: { text: 'hello' }, event: '{}',
     }
     await store.write([rich], 'replace')
-    await store.write([{ ...rich, kind: 'session-event', sourceKind: undefined, text: undefined }], 'keep')
+    await store.write([{ sessionId: rich.sessionId, seq: rich.seq, ordinal: 0, time: 1, kind: 'session-event', body: {}, event: '{}' }], 'keep')
     expect((await store.query({ sessionId: rich.sessionId })).map(record => record.kind)).toEqual(['user-message'])
     await store.close()
   })

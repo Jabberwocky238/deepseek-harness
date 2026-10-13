@@ -2775,23 +2775,34 @@ export type SessionLogCompressionLevel = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-session-log-export -->
 
-<!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-session-manager-adapter-sql -->
-<a id="deepseek-aidsh-session-manager-adapter-sql"></a>
+<!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-session-manager -->
+<a id="deepseek-aidsh-session-manager"></a>
 
-## `@deepseek-ai/dsh-session-manager-adapter-sql`
+## `@deepseek-ai/dsh-session-manager`
 
-- `inject`: `sessions`
-- `source`: [`packages/session/session-manager-adapter-sql/src/index.ts:35`](../packages/session/session-manager-adapter-sql/src/index.ts)
+- `inject`: `sessions` · `credentials`
+- `source`: [`packages/session/session-manager/src/index.ts:27`](../packages/session/session-manager/src/index.ts)
 
 ```ts config-catalog
 /** Backend configuration as authored in `cordis.yml`. */
 export interface Config {
-  /** SQLite database file, or `:memory:` for an ephemeral store. */
-  path: string
-  /** Open the database during activation (`startup`) or on the first record (`never`). */
-  openAt?: 'startup' | 'never'
+  /** Storage engine: a local SQLite file, or a PostgreSQL database. */
+  driver?: 'sqlite' | 'postgres'
+  /** SQLite database file, or `:memory:` for an ephemeral store; required with the `sqlite` driver. */
+  path?: string
   /** SQLite journal mode; `:memory:` ignores it. */
   journalMode?: JournalMode
+  /** PostgreSQL connection; required with the `postgres` driver. */
+  postgres?: {
+    /** Credential reference holding the connection string, `postgres://user:password@host:port/database`; required with the `postgres` driver. */
+    connectionStringEnv?: string
+    /** Schema holding `session_interaction` and its migration ledger. */
+    schema: string
+    /** Upper bound on pooled connections. */
+    maxConnections: number
+  }
+  /** Open the store during activation (`startup`) or on the first record (`never`). */
+  openAt?: 'startup' | 'never'
   /**
    * Session ids to rebuild from the store during activation, before any agent
    * can resume them. Use it to bring back a session whose canonical log was
@@ -2803,7 +2814,7 @@ export interface Config {
 /** Supported SQLite journal modes. */
 export type JournalMode = 'wal' | 'delete' | 'truncate' | 'persist'
 ```
-<!-- END GENERATED config-catalog:@deepseek-ai/dsh-session-manager-adapter-sql -->
+<!-- END GENERATED config-catalog:@deepseek-ai/dsh-session-manager -->
 
 <!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-session-persistence-jsonl -->
 <a id="deepseek-aidsh-session-persistence-jsonl"></a>
@@ -4886,7 +4897,6 @@ export interface Config {
 | `@deepseek-ai/dsh-session-format-v1-to-v2` | — | [`packages/session/session-format-v1-to-v2/src/index.ts`](../packages/session/session-format-v1-to-v2/src/index.ts) |
 | `@deepseek-ai/dsh-session-format-v2-to-v3` | — | [`packages/session/session-format-v2-to-v3/src/index.ts`](../packages/session/session-format-v2-to-v3/src/index.ts) |
 | `@deepseek-ai/dsh-session-format-v3-to-v4` | — | [`packages/session/session-format-v3-to-v4/src/index.ts`](../packages/session/session-format-v3-to-v4/src/index.ts) |
-| `@deepseek-ai/dsh-session-manager` | — | [`packages/session/session-manager/src/index.ts`](../packages/session/session-manager/src/index.ts) |
 | `@deepseek-ai/dsh-session-snapshot` | — | [`packages/test-support/session-snapshot/src/index.ts`](../packages/test-support/session-snapshot/src/index.ts) |
 | `@deepseek-ai/dsh-session-telemetry` | — | [`packages/session/session-telemetry/src/index.ts`](../packages/session/session-telemetry/src/index.ts) |
 | `@deepseek-ai/dsh-session-title-llm` | — | [`packages/session/session-title-llm/src/index.ts`](../packages/session/session-title-llm/src/index.ts) |

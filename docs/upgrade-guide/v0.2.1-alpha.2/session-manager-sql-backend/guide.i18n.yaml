@@ -1,0 +1,16 @@
+# Bilingual-pair consistency record for guide.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write docs/upgrade-guide/v0.2.1-alpha.2/session-manager-sql-backend/guide.md
+/:
+  en: 1d0c67ef1837ebd8
+  zh: 241513d963fad935
+/session-manager-sql-backend-package-merge-and-rename:
+  en: 1ee351400cf49a65
+  zh: 910dc0155dba8867
+/session-manager-sql-backend-package-merge-and-rename/change:
+  en: efaadc677a004ec6
+  zh: 4a53c7c54c49dd8a
+/session-manager-sql-backend-package-merge-and-rename/migration:
+  en: ad7a09f1564628da
+  zh: 7ba8c575b97ca94b

@@ -38,8 +38,7 @@ session 组让对话持久保存，恢复已发布的日志格式，并使已提
 | [`session-persistence-jsonl/`](session-persistence-jsonl/README.zh.md) | 随产品交付的后端：逐 Session 使用不可变规范 generation 文件名并排他发布后继；可选 Zstandard 压缩 | 注册到 `ctx.sessionPersistence` |
 | [`session-checkpoint-policy/`](session-checkpoint-policy/README.zh.md) | 让模型请求、顶层工具副作用与已完成步骤在下一步动作前持久化 | 包装 `ctx.llm` 与 `ctx.tools` |
 | [`session-log-deepseek/`](session-log-deepseek/README.zh.md) | 把增量规范日志作为可选的官方 DeepSeek 请求元数据上传 | 贡献 `dsh_session_log` |
-| [`session-manager/`](session-manager/README.zh.md) | 定义会话交互记录的 seam，把已提交的 Session 事件采集进去 | `ctx.sessionManager` |
-| [`session-manager-adapter-sql/`](session-manager-adapter-sql/README.zh.md) | 随包发布的后端：一条交互记录一行，并能在激活时重建丢失的会话日志 | 注册到 `ctx.sessionManager` |
+| [`session-manager/`](session-manager/README.zh.md) | 定义会话交互记录的 seam，把已提交的 Session 事件采集进去，并自带 SQLite/PostgreSQL 后端，可在激活时重建丢失的会话日志 | `ctx.sessionManager` |
 
 ### 投影
 

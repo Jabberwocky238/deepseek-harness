@@ -84,7 +84,7 @@ Capture is one coordinator per backend, and it is deliberately fork-free: handli
 | [`src/backend.ts`](src/backend.ts) | `SessionManagerBackend`, `SessionManagerSink`, the query and log types, and the `ctx.sessionManager` registration |
 | [`src/records.ts`](src/records.ts) | The record vocabulary and the session-event mapping |
 | [`src/coordinator.ts`](src/coordinator.ts) | Capture, buffering, serialized writes, and disposal |
-| [`src/sql.ts`](src/sql.ts) | `SqlSessionManager`: configuration, reconciliation, restore, and shutdown |
+| [`src/index.ts`](src/index.ts) | `SqlSessionManager`, the default export: configuration, reconciliation, restore, and shutdown; re-exports the seam |
 | [`src/store.ts`](src/store.ts) | The engine-neutral `InteractionStore` and the shared column and query mapping |
 | [`src/adaptors/sqlite/`](src/adaptors/sqlite/) | SQLite schema, migrations, and store on `node:sqlite` |
 | [`src/adaptors/psql/`](src/adaptors/psql/) | PostgreSQL schema, migrations, and store on `pg`, loaded only with the `postgres` driver |

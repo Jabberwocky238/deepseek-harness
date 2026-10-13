@@ -84,7 +84,7 @@ const log = await ctx.sessionManager.readSession(sessionId)   // header plus eve
 | [`src/backend.ts`](src/backend.ts) | `SessionManagerBackend`、`SessionManagerSink`、查询与日志类型，以及 `ctx.sessionManager` 注册 |
 | [`src/records.ts`](src/records.ts) | 记录词汇与会话事件映射 |
 | [`src/coordinator.ts`](src/coordinator.ts) | 采集、缓冲、串行写入与销毁 |
-| [`src/sql.ts`](src/sql.ts) | `SqlSessionManager`：配置、对账、恢复与关闭 |
+| [`src/index.ts`](src/index.ts) | 默认导出 `SqlSessionManager`：配置、对账、恢复与关闭；并重新导出 seam |
 | [`src/store.ts`](src/store.ts) | 与引擎无关的 `InteractionStore`，以及共用的列与查询映射 |
 | [`src/adaptors/sqlite/`](src/adaptors/sqlite/) | 基于 `node:sqlite` 的 SQLite 表结构、迁移与存储 |
 | [`src/adaptors/psql/`](src/adaptors/psql/) | 基于 `pg` 的 PostgreSQL 表结构、迁移与存储，仅在 `postgres` driver 下加载 |

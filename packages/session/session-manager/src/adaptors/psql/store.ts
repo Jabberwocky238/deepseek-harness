@@ -88,8 +88,8 @@ export async function openPsqlStore(options: PsqlStoreOptions): Promise<Interact
       const { sql, values } = queryClause(query, n => `$${n}`)
       return decodeRows((await pool.query(`SELECT * FROM ${table}${sql}`, values)).rows, recordFromRow)
     },
-    async lastEventSeq(sessionId) {
-      const result = await pool.query(`SELECT MAX(seq) AS last FROM ${table} WHERE session_id = $1 AND event IS NOT NULL`, [sessionId])
+    async lastEventSeq(sessionId, before) {
+      const result = await pool.query(`SELECT MAX(seq) AS last FROM ${table} WHERE session_id = $1 AND seq < $2 AND event IS NOT NULL`, [sessionId, before])
       return decodeRow(result.rows[0], row => rowNullableInteger(row, 'last')) ?? undefined
     },
     async header(sessionId) {

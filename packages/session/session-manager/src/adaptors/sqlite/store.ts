@@ -48,9 +48,9 @@ export async function openSqliteStore(path: string, journalMode: JournalMode): P
       const { sql, values } = queryClause(query, () => '?')
       return decodeRows(db.prepare(`SELECT * FROM session_interaction${sql}`).all(...values), recordFromRow)
     }),
-    lastEventSeq: (sessionId: SessionId) => settle(() => decodeRow(db.prepare(
-      'SELECT MAX(seq) AS last FROM session_interaction WHERE session_id = ? AND event IS NOT NULL',
-    ).get(sessionId), row => rowNullableInteger(row, 'last')) ?? undefined),
+    lastEventSeq: (sessionId: SessionId, before: number) => settle(() => decodeRow(db.prepare(
+      'SELECT MAX(seq) AS last FROM session_interaction WHERE session_id = ? AND seq < ? AND event IS NOT NULL',
+    ).get(sessionId, before), row => rowNullableInteger(row, 'last')) ?? undefined),
     header: sessionId => settle(() => decodeRow(db.prepare(
       `SELECT body FROM session_interaction
         WHERE session_id = ? AND kind = 'session-header' ORDER BY seq LIMIT 1`,

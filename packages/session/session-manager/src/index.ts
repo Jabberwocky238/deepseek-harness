@@ -125,7 +125,9 @@ export class SqlSessionManager extends SessionManagerBackend {
     // history and the `session/end-seed` its constructor appends precede its
     // announcement. Each announcement writes the tail the store lacks, once.
     ctx.on('session/created', (session: Session) => {
-      void this.catchUp(session).catch((error: unknown) => {
+      // Live capture owns every event from here on; bound the catch-up now,
+      // before the next turn's events land.
+      void this.catchUp(session, session.seq).catch((error: unknown) => {
         this.ctx.logger.warn('session manager: catching up session %s failed: %o', session.id, error)
       })
     })
@@ -187,15 +189,19 @@ export class SqlSessionManager extends SessionManagerBackend {
    * mounted persistence backend, or a log for the session, there is nothing to
    * read.
    * @param session - the announced session.
+   * @param end - the session's next sequence number at announcement; events
+   *   from it on belong to live capture.
    */
-  private async catchUp(session: Session): Promise<void> {
+  private async catchUp(session: Session, end: number): Promise<void> {
     const persistence = this.persistence
     if (persistence === undefined || await persistence.stat(session.id) === undefined) return
     const store = await this.store()
-    const last = await store.lastEventSeq(session.id)
+    const last = await store.lastEventSeq(session.id, end)
+    const from = last === undefined ? 0 : last + 1
+    if (from >= end) return
     const handle = await persistence.open(session.id, 'read')
     try {
-      const { events } = await handle.read(last === undefined ? 0 : last + 1)
+      const { events } = await handle.read(from, end - from)
       const records: SessionInteractionRecord[] = []
       const first = events[0]
       if (last === undefined && first !== undefined) records.push(headerRecord(session.id, handle.header, first.time, first.seq))

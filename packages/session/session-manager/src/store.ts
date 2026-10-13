@@ -29,11 +29,12 @@ export interface InteractionStore {
    */
   query(query: SessionInteractionQuery): Promise<SessionInteractionRecord[]>
   /**
-   * Highest sequence number with a stored event.
+   * Highest sequence number below `before` with a stored event.
    * @param sessionId - session to inspect.
-   * @returns that sequence number, or `undefined` when the session has no stored event.
+   * @param before - exclusive upper bound on the sequence number.
+   * @returns that sequence number, or `undefined` when no stored event lies below the bound.
    */
-  lastEventSeq(sessionId: SessionId): Promise<number | undefined>
+  lastEventSeq(sessionId: SessionId, before: number): Promise<number | undefined>
   /**
    * The stored session header, as its serialized JSON.
    * @param sessionId - session to read.

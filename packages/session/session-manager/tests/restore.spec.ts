@@ -116,7 +116,7 @@ describe('restore from the interaction store', () => {
       .toContain('thinking')
   })
 
-  it('stores a resumed session\'s logged history when the session is announced', async () => {
+  it('stores a resumed session\'s logged history when the session is announced, alongside its live events', async () => {
     const recorder = new Context()
     contexts.push(recorder)
     await recorder.plugin(SessionStore)
@@ -131,11 +131,13 @@ describe('restore from the interaction store', () => {
 
     // A store that never saw the conversation, then the session resumed from its log.
     const ctx = await boot()
-    ctx.sessions.create(SESSION, { seed: original.events, meta: { ...session.header } })
+    const resumed = ctx.sessions.create(SESSION, { seed: original.events, meta: { ...session.header } })
+    // The next turn starts at once, so live capture may store it before the catch-up runs.
+    resumed.append('turn/start', { turn: 2 })
     await vi.waitFor(async () => {
       const stored = await ctx.sessionManager.read({ sessionId: SESSION })
       expect(stored.filter(record => record.event !== undefined).map(record => record.seq))
-        .toEqual(original.events.map(event => event.seq))
+        .toEqual([...original.events.map(event => event.seq), resumed.seq - 1])
     })
     const records = await ctx.sessionManager.read({ sessionId: SESSION })
     expect(records.map(record => record.kind)).toEqual(expect.arrayContaining(['session-header', 'user-message', 'thinking']))

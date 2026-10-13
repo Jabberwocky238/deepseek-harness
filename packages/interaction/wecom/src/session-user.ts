@@ -1,12 +1,15 @@
 /**
  * One container login per WeCom conversation.
  *
- * A bot's container is an ordinary Linux host: each conversation runs as its own
- * login, works in its own home directory, and reaches the container over its own
- * OpenSSH alias. The alias is what keeps connections apart — the ssh providers
- * are mounted per Agent, so an Agent talks to the container as its own login.
- * Login and home derive from the conversation key, so they are stable across
- * restarts and match the Session id.
+ * A bot's container is an ordinary Linux host: each conversation gets its own
+ * login and home directory, and reaches the container over its own OpenSSH
+ * alias. The alias is what keeps the login and home apart, not the login the
+ * Agent's commands run as: the ssh providers stay the deployment's own, so
+ * every conversation's commands execute as that login. Each home is mode 750
+ * and belongs to that login's own group, which admits the deployment-wide
+ * connection while no other login in the container can read it. Login and home
+ * derive from the conversation key, so they are stable across restarts and
+ * match the Session id.
  *
  * @module @deepseek-ai/dsh-wecom/session-user
  */
@@ -37,6 +40,8 @@ export interface SshTarget {
   hostName: string
   /** Port the deployment alias uses. */
   port: string
+  /** Login the deployment's own connection authenticates as. */
+  login: string
   /** Private key the deployment alias authenticates with, expanded. */
   identityFile: string
   /** Matching public key, installed for every conversation's login. */
@@ -46,7 +51,7 @@ export interface SshTarget {
 /**
  * Read the effective connection of a deployment-owned OpenSSH alias.
  * @param host - alias the deployment's own ssh providers use.
- * @returns host, port, key and public key of that alias.
+ * @returns login, host, port, key and public key of that alias.
  */
 export async function resolveSshTarget(host: string): Promise<SshTarget> {
   const { stdout } = await run('ssh', ['-G', host])
@@ -56,12 +61,13 @@ export async function resolveSshTarget(host: string): Promise<SshTarget> {
   const value = (key: string): string | undefined => stdout.match(new RegExp(`^${key} (.+)$`, 'mu'))?.[1]
   const hostName = value('hostname')
   const port = value('port')
+  const login = value('user')
   const identityFile = value('identityfile')
-  if (hostName === undefined || port === undefined || identityFile === undefined) {
-    throw new Error(`wecom: ssh alias ${host} resolves no host name, port and identity file`)
+  if (hostName === undefined || port === undefined || login === undefined || identityFile === undefined) {
+    throw new Error(`wecom: ssh alias ${host} resolves no login, host name, port and identity file`)
   }
   const key = identityFile.replace(/^~(?=\/)/u, homedir())
-  return { hostName, port, identityFile: key, publicKey: (await readFile(`${key}.pub`, 'utf8')).trim() }
+  return { hostName, port, login, identityFile: key, publicKey: (await readFile(`${key}.pub`, 'utf8')).trim() }
 }
 
 /**
@@ -74,8 +80,9 @@ export async function resolveSshTarget(host: string): Promise<SshTarget> {
  */
 export function sessionIdentity(botId: string, key: string, homeRoot: string, sshHost: string): SessionIdentity {
   const digest = createHash('sha256').update(JSON.stringify([botId, key])).digest('hex')
-  // The key is `[chattype, chatid | null, userid]`: a group is named by its chat,
-  // a direct chat by its member.
+  // The key is `[chattype, chatid | null, userid]`. Its first string is always
+  // the conversation kind, so the readable segment is `single` or `group`; the
+  // digest, computed over the whole key, is what keeps two conversations apart.
   const parts: unknown = JSON.parse(key)
   const named = Array.isArray(parts) ? parts.find(part => typeof part === 'string' && part !== '') : undefined
   const readable = String(named ?? '').toLowerCase().replaceAll(/[^a-z0-9]+/gu, '_').replaceAll(/^_+|_+$/gu, '').slice(0, 16)
@@ -84,28 +91,42 @@ export function sessionIdentity(botId: string, key: string, homeRoot: string, ss
 }
 
 /**
+ * Quote one argument for the container's shell. Single quotes neutralize every
+ * metacharacter the remote shell would otherwise interpret — spaces, `;`,
+ * `$(...)` and backticks included — so a path or login name reaches the
+ * provisioner verbatim. An embedded single quote is closed, escaped and reopened.
+ * @param value - argument to pass to the container-side provisioner.
+ * @returns the argument, single-quoted for the container's shell.
+ */
+export function quoteArgument(value: string): string {
+  return `'${value.replaceAll("'", "'\\''")}'`
+}
+
+/**
  * Ensure the conversation's login, home and login key exist. Idempotent, so a
  * resumed conversation repeats it harmlessly.
  * @param shell - deployment-wide shell provider that reaches the container.
  * @param identity - conversation identity to create.
  * @param script - container-side provisioner, run as root.
- * @param publicKey - login key to install; no password is ever set.
+ * @param target - connection facts of the deployment's own alias, whose login
+ * the provisioner needs to admit to the conversation's home.
  * @param timeoutMs - deadline for the provisioning command.
  */
 export async function ensureSessionUser(
   shell: ShellExecutor,
   identity: SessionIdentity,
   script: string,
-  publicKey: string,
+  target: SshTarget,
   timeoutMs: number,
 ): Promise<void> {
+  const arguments_ = [script, identity.user, identity.home, target.login].map(quoteArgument).join(' ')
   const execution = await shell.execute(shell.resolve({
-    command: `sudo -n ${script} ${identity.user} ${identity.home}`,
+    command: `sudo -n ${arguments_}`,
     // The executor would otherwise fall back to the harness process's own cwd,
     // which is a host path the container does not have. The login's home does
     // not exist until the provisioner makes it, so run from its parent.
     workdir: dirname(identity.home),
-    stdin: `${publicKey}\n`,
+    stdin: `${target.publicKey}\n`,
     timeoutMs,
     onExpiry: 'kill',
     stdoutMaxBytes: 4096,

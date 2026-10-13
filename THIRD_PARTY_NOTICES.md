@@ -34,6 +34,8 @@ External packages installed for runtime use or distributed inside the prebuilt b
 | [`@agentclientprotocol/sdk`](https://github.com/agentclientprotocol/typescript-sdk) | Apache-2.0 |
 | [`@anthropic-ai/claude-agent-sdk`](https://github.com/anthropics/claude-agent-sdk-typescript) | SEE LICENSE IN README.md |
 | [`@anthropic-ai/sdk`](https://github.com/anthropics/anthropic-sdk-typescript) | MIT |
+| [`@aws-sdk/client-s3`](https://github.com/aws/aws-sdk-js-v3) | Apache-2.0 |
+| [`@aws-sdk/lib-storage`](https://github.com/aws/aws-sdk-js-v3) | Apache-2.0 |
 | [`@babel/code-frame`](https://github.com/babel/babel) | MIT |
 | [`@browserbasehq/stagehand`](https://github.com/browserbase/stagehand) | MIT |
 | [`@deepseek-ai/libreoffice-kit`](https://github.com/deepseek-ai/dsh-libreoffice-kit) | MPL-2.0 |

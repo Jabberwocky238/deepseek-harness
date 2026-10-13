@@ -3,20 +3,20 @@
 # After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/interaction/tool-wecom/README.md
 /:
-  en: a2f9117b5530cb27
-  zh: 2c452fb49090cf03
+  en: 72e2afda30d61e4d
+  zh: 2ab4ca87267826ad
 /deepseek-ai-dsh-tool-wecom:
   en: d6346d4b21211e49
   zh: f90cab611f3e691a
 /deepseek-ai-dsh-tool-wecom/summary:
-  en: 087b27448e9ac157
-  zh: 55de1cfd52c37b11
+  en: e67d7516e6a31bb3
+  zh: b76d7b81d2411421
 /deepseek-ai-dsh-tool-wecom/table-of-contents:
   en: 76368b6b1da79c80
   zh: ddafa933c150c4d1
 /deepseek-ai-dsh-tool-wecom/use-this-package:
-  en: c2fac32eddd65307
-  zh: 227f9a93c9e49e17
+  en: 7f6f85c0e2ecb56e
+  zh: 16dd2096ca66fbb3
 /deepseek-ai-dsh-tool-wecom/understand-the-implementation:
   en: 65cafcb88a6c61b5
   zh: 5a3924146a17ee42

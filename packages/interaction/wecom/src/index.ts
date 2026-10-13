@@ -17,10 +17,13 @@ import z from '@deepseek-ai/schemastery'
 import { WSClient } from '@wecom/aibot-node-sdk'
 import { assertNever } from '@deepseek-ai/dsh-util-values'
 import { createReplyStream } from './reply-stream.ts'
-import { admitMessageContent } from './attachments.ts'
+import { admitMessageContent, hostInbox, splitName, type InboundInbox } from './attachments.ts'
 import { sendToChat, type WecomDelivered, type WecomOutbound } from './send.ts'
 import { limitReply, messageSchema, messageParts, type InboundMessage } from './message.ts'
-import { ensureSessionAlias, ensureSessionUser, resolveSshTarget, sessionIdentity, type SessionIdentity } from './session-user.ts'
+import { ensureSessionAlias, ensureSessionUser, quoteArgument, resolveSshTarget, sessionIdentity, type SessionIdentity } from './session-user.ts'
+import { defaultPrefix, FileStore, isBoxName, normalizePrefix, type WecomFiles } from './file-store.ts'
+
+export type { FileDirection, StoredEntry, WecomFiles } from './file-store.ts'
 
 /** Cordis function-plugin name. */
 export const name = 'wecom'
@@ -37,6 +40,11 @@ declare module '@deepseek-ai/cordis' {
      */
     wecom: {
       send(sessionId: SessionId, outbound: WecomOutbound): Promise<WecomDelivered>
+      /**
+       * The calling Session's inbox and outbox in the configured bucket;
+       * undefined when this bot keeps `fileStore` off.
+       */
+      files: WecomFiles | undefined
     }
   }
 }
@@ -63,13 +71,9 @@ export interface Config {
    */
   sessionSshHost?: string
   /** Container-side provisioner creating a conversation's login, home and key. */
-  sessionUserScript?: string
-  /** Remote ssh helper entry each conversation's connection launches. */
-  sessionHelper?: string
-  /** SHA-256 of that helper; required in conversation-scoped mode. */
-  sessionHelperHash?: string
+  sessionUserScript: string
   /** Host-side OpenSSH include file receiving one alias per conversation. */
-  sessionSshConfig?: string
+  sessionSshConfig: string
   /** Existing absolute working directory shared by this bot's Agents, in single-workspace mode. */
   workspacePath?: string
   /** Permission preset applied before the first input is admitted. */
@@ -100,7 +104,10 @@ export interface Config {
   /**
    * Absolute directory inside the Agent's own filesystem where inbound
    * attachments are saved and named in the prompt, so the Agent can open the
-   * bytes with its tools whatever their format is.
+   * bytes with its tools whatever their format is. Single-workspace mode only:
+   * a conversation-scoped bot publishes each conversation's attachments to
+   * `<home>/inbox/`, owned by root so the conversation can read but not change
+   * them.
    */
   inboundDir: string
   /**
@@ -130,6 +137,49 @@ export interface Config {
   heartbeatIntervalMs: number
   /** Language of transport status replies. */
   language: 'zh' | 'en'
+  /**
+   * Per-session inbox/outbox file storage, backed by an S3-compatible bucket.
+   * Off by default. When enabled, inbound attachments are stored under
+   * `<prefix>/<session>/inbox/` and outbound attachments under
+   * `<prefix>/<session>/outbox/`.
+   * Storage runs in the background: neither a message nor a delivery waits for
+   * the upload.
+   */
+  fileStore?: {
+    /** Whether per-session file storage is active. */
+    enabled: boolean
+    /** `mirror` keeps a local copy beside the bucket; `s3only` writes only the bucket. */
+    mode: 'mirror' | 's3only'
+    /** S3-compatible endpoint, bucket and static credentials; required when enabled. */
+    s3?: {
+      /** Endpoint URL, such as `https://cos.ap-beijing.myqcloud.com` or a MinIO address. */
+      endpoint: string
+      /** Bucket receiving `<prefix>/<session>/inbox/` and `<prefix>/<session>/outbox/` objects. */
+      bucket: string
+      /** Signing region; omission leaves the SDK's own default. */
+      region?: string
+      /** Access key id of the static credential. */
+      accessKeyId: string
+      /** Credential reference containing the secret access key. */
+      secretAccessKeyEnv: string
+      /** Address the bucket in the URL path rather than the host name, as MinIO expects; Tencent COS refuses it, so turn it off there. */
+      forcePathStyle: boolean
+    }
+    /** Host-side root of the local mirror; required in `mirror` mode. */
+    localRoot?: string
+    /**
+     * Key prefix every stored object sits under, so the bucket root holds no
+     * files. Omission uses this package's published name, such as
+     * `@jabberwocky238/dsh-wecom`.
+     */
+    prefix?: string
+    /** Multipart part size in bytes, at least 5 MiB; a file no larger than one part is a single upload. */
+    partSize: number
+    /** Parts of one file uploaded concurrently. */
+    partConcurrency: number
+    /** Files the background queue uploads concurrently. */
+    uploadConcurrency: number
+  }
 }
 
 export const Config: z<Config> = z.object({
@@ -139,8 +189,6 @@ export const Config: z<Config> = z.object({
   sessionHomeRoot: z.string(),
   sessionSshHost: z.string(),
   sessionUserScript: z.string().default('/usr/local/sbin/dsh-session-user'),
-  sessionHelper: z.string().default('/opt/dsh-ssh-helper/dsh-ssh-helper'),
-  sessionHelperHash: z.string(),
   sessionSshConfig: z.string().default('~/.ssh/dsh-sessions.conf'),
   workspacePath: z.string(),
   permissionPreset: z.string().required(),
@@ -164,6 +212,23 @@ export const Config: z<Config> = z.object({
   maxAuthFailureAttempts: z.number().step(1).min(1).default(5),
   heartbeatIntervalMs: z.number().step(1).min(1).default(30000),
   language: z.union(['zh', 'en']).default('zh'),
+  fileStore: z.object({
+    enabled: z.boolean().default(false),
+    mode: z.union(['mirror', 's3only']).default('s3only'),
+    s3: z.object({
+      endpoint: z.string(),
+      bucket: z.string(),
+      region: z.string(),
+      accessKeyId: z.string(),
+      secretAccessKeyEnv: z.string().role('credential-ref'),
+      forcePathStyle: z.boolean().default(true),
+    }),
+    localRoot: z.string(),
+    prefix: z.string(),
+    partSize: z.number().step(1).min(5242880).default(8388608),
+    partConcurrency: z.number().step(1).min(1).default(4),
+    uploadConcurrency: z.number().step(1).min(1).default(2),
+  }),
 })
 
 const replies = {
@@ -186,21 +251,38 @@ interface ActiveTurn {
 interface Conversation {
   handle?: AgentHandle
   tail: Promise<void>
+  /**
+   * The conversation's container login and home being created, in
+   * conversation-scoped mode; cleared on failure so the next message retries.
+   */
+  provisioned?: Promise<void> | undefined
   /** The answering turn, present only while one is running. */
   active?: ActiveTurn | undefined
   /**
-   * Session identity derived from this conversation, present only while
-   * `resumeConversations` is on. It outlives the process: the same WeCom
-   * conversation recomputes the same id on the next start.
+   * Session id this conversation's Agent runs under, fixed when the
+   * conversation is first seen so inbound files can be stored before the Agent
+   * exists. With `resumeConversations` it is derived from the conversation and
+   * outlives the process; otherwise it is random and process-local.
    */
-  sessionId?: SessionId
+  id: SessionId
+  /** Whether {@link id} is derived, so a persisted Session may be resumed under it. */
+  resumable: boolean
   /**
    * Container login this conversation works as, present only in
-   * conversation-scoped mode. Derived from the same key as {@link sessionId},
-   * so it is stable across restarts too.
+   * conversation-scoped mode. Derived from the same key as a resumable
+   * {@link id}, so it is stable across restarts too.
    */
   identity?: SessionIdentity
 }
+
+/**
+ * Shell fragment sealing the directory in `$1` as a conversation's inbox before
+ * a write: the directory and every file in it become root-owned, the directory
+ * mode 755 and each file 644. The conversation can read its attachments but
+ * not change, remove or add to them, whoever created the directory or a file
+ * earlier.
+ */
+const SEAL_INBOX = 'mkdir -p "$1" && chown -R root:root "$1" && chmod 755 "$1" && find "$1" -type f -exec chmod 644 {} +'
 
 /**
  * Stable Session id for one WeCom conversation, derived from the bot and the
@@ -212,42 +294,6 @@ interface Conversation {
 function conversationSessionId(botId: string, key: string): SessionId {
   const digest = createHash('sha256').update(JSON.stringify([botId, key])).digest('hex')
   return SessionId(`wecom-${digest}`)
-}
-
-/**
- * Mount the conversation's own execution providers inside its Agent scope: the
- * ssh providers connect as {@link SessionIdentity.user} to
- * {@link SessionIdentity.home}, so the Bash and filesystem tools this Agent
- * mounts resolve them instead of the deployment-wide providers the plugin
- * itself uses to provision logins.
- * @param agentCtx - the Agent's unpublished scope.
- * @param identity - conversation identity to connect as.
- * @param config - configuration as validated by {@link Config}.
- */
-/** Service names this Agent's providers replace, so one conversation cannot reach another's. */
-const SESSION_SERVICES = ['ssh', 'fs', 'subprocess', 'sandbox', 'sandboxPolicy', 'shell'] as const
-
-async function mountSessionProviders(agentCtx: Context, identity: SessionIdentity, config: Config): Promise<void> {
-  const [ssh, fs, subprocess, sandbox, shell] = await Promise.all([
-    import('@deepseek-ai/dsh-ssh'),
-    import('@deepseek-ai/dsh-fs-ssh'),
-    import('@deepseek-ai/dsh-subprocess-ssh'),
-    import('@deepseek-ai/dsh-sandbox-ssh'),
-    import('@deepseek-ai/dsh-bash-sandbox'),
-  ])
-  await agentCtx.plugin(ssh.default, {
-    host: identity.alias,
-    launch: { kind: 'executable' },
-    helper: config.sessionHelper ?? '/opt/dsh-ssh-helper/dsh-ssh-helper',
-    helperHash: config.sessionHelperHash ?? '',
-    workspace: identity.home,
-  })
-  await agentCtx.plugin(fs.default)
-  await agentCtx.plugin(subprocess.default)
-  await agentCtx.plugin(sandbox.default)
-  // The shell provider closes the chain: the Bash tool resolves `ctx.shell`
-  // here, and this executor spawns through the conversation's own providers.
-  await agentCtx.plugin(shell.default, { timeoutMs: 60_000 })
 }
 
 /**
@@ -306,12 +352,34 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
   if (sshTarget !== undefined && sessionShell === undefined) {
     throw new Error('wecom: conversation-scoped conversations require a mounted shell provider')
   }
-  const sshConfigPath = config.sessionSshConfig ?? '~/.ssh/dsh-sessions.conf'
+  const sshConfigPath = config.sessionSshConfig
   // Inbound attachments are published into the Agent's filesystem through a
   // deployment-provided mount, so the plugin writes its host side.
-  const inbox = config.inboundHostDir === undefined
+  const sharedInbox = config.inboundHostDir === undefined
     ? undefined
-    : { agentDir: config.inboundDir, hostDir: config.inboundHostDir }
+    : hostInbox(config.inboundDir, config.inboundHostDir)
+  // Per-session file storage is additive and off by default; enabling it
+  // requires an S3 endpoint, bucket and credentials, plus a local root in
+  // mirror mode.
+  let fileStore: FileStore | undefined
+  if (config.fileStore?.enabled === true) {
+    const fs = config.fileStore
+    if (fs.s3 === undefined) throw new Error('wecom fileStore requires an s3 endpoint, bucket and credentials when enabled')
+    if (fs.mode === 'mirror' && fs.localRoot === undefined) throw new Error('wecom fileStore mirror mode requires a localRoot')
+    if (fs.localRoot !== undefined && !isAbsolute(fs.localRoot)) throw new Error('wecom fileStore localRoot must be an absolute path')
+    const secret = await ctx.credentials.resolve(credentialRef(fs.s3.secretAccessKeyEnv))
+    if (secret === undefined) throw new Error(`wecom fileStore credential ${fs.s3.secretAccessKeyEnv} is not configured`)
+    const { secretAccessKeyEnv: _reference, ...s3 } = fs.s3
+    fileStore = new FileStore({
+      mode: fs.mode,
+      s3: { ...s3, secretAccessKey: secret.value },
+      ...(fs.localRoot === undefined ? {} : { localRoot: fs.localRoot }),
+      prefix: normalizePrefix(fs.prefix ?? await defaultPrefix()),
+      partSize: fs.partSize,
+      partConcurrency: fs.partConcurrency,
+      uploadConcurrency: fs.uploadConcurrency,
+    }, (message, error) => { ctx.logger.warn('%s: %o', message, error) })
+  }
   ctx.permissionPresets.resolve(config.permissionPreset)
   const presets = ctx.get('agentPresets')
   let mountPreset: ((agentCtx: Context) => Promise<unknown>) | undefined
@@ -340,10 +408,138 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
    * tool cannot address a chat this process is not connected to.
    */
   const sendTargets = new Map<string, { client: WSClient; chatid: string; delivered: boolean }>()
+  /** Each live Session's working directory, and its container login in conversation-scoped mode. */
+  const workdirs = new Map<string, { cwd: string; user?: string }>()
+  /**
+   * Run one command where the Agent's files live, through the deployment-wide
+   * shell provider: the Agent's filesystem has no binary write, so pulled bytes
+   * travel base64-encoded on stdin.
+   */
+  const runInWorkdir = async (command: string, stdin: string, workdir: string): Promise<string> => {
+    const shell = ctx.get('shell')
+    if (shell === undefined) throw new Error('wecom: pulling stored files requires a mounted shell provider')
+    const execution = await shell.execute(shell.resolve({
+      command,
+      workdir,
+      stdin,
+      timeoutMs: config.attachmentTimeoutMs,
+      onExpiry: 'kill',
+      stdoutMaxBytes: 1 << 20,
+    }))
+    const result = await execution.result()
+    if (result.exitCode !== 0) {
+      throw new Error(`wecom: file sync command failed: ${result.stderr.text.trim() || `exit ${String(result.exitCode)}`}`)
+    }
+    return result.stdout.text
+  }
+  /**
+   * Shell command writing stdin, base64-decoded, to `<directory>/<name>`. A
+   * conversation login's home is not writable by the deployment login, so that
+   * case writes as root: a sealed directory (the conversation's inbox) is first
+   * sealed, otherwise the file and a newly created directory go to the login.
+   */
+  const writeCommand = (directory: string, name: string, user: string | undefined, sealed: boolean): string => {
+    if (user === undefined) {
+      return `mkdir -p ${quoteArgument(directory)} && base64 -d > ${quoteArgument(`${directory}/${name}`)}`
+    }
+    const script = sealed
+      ? `${SEAL_INBOX}\nbase64 -d > "$1/$2" && chmod 644 "$1/$2"`
+      : '[ -d "$1" ] || install -d -o "$3" -g "$3" "$1"; base64 -d > "$1/$2" && chown "$3:$3" "$1/$2"'
+    return `sudo -n sh -c ${quoteArgument(script)} sh ${[directory, name, user].map(quoteArgument).join(' ')}`
+  }
+  /**
+   * Create the conversation's container login, home and OpenSSH alias once.
+   * Both the inbox and the Agent need the home to exist first: an inbox
+   * written before it would leave a root-owned home behind.
+   */
+  const provision = (conversation: Conversation): Promise<void> => {
+    const identity = conversation.identity
+    if (identity === undefined || sshTarget === undefined || sessionShell === undefined) return Promise.resolve()
+    conversation.provisioned ??= (async () => {
+      await ensureSessionUser(sessionShell, identity, config.sessionUserScript, sshTarget, config.attachmentTimeoutMs)
+      await ensureSessionAlias(identity, sshTarget, sshConfigPath)
+    })().catch((error: unknown) => {
+      conversation.provisioned = undefined
+      throw error
+    })
+    return conversation.provisioned
+  }
+  /**
+   * The inbox one conversation's attachments are published to. A conversation
+   * login gets `<home>/inbox/`, written as root through the deployment-wide
+   * shell: the directory is root-owned 755 and each file root-owned 644, so the
+   * conversation reads its attachments and cannot change or remove them.
+   * Without a conversation login every conversation shares the configured
+   * host-bound inbox.
+   */
+  const inboxFor = (conversation: Conversation): InboundInbox | undefined => {
+    const identity = conversation.identity
+    if (identity === undefined) return sharedInbox
+    const directory = `${identity.home}/inbox`
+    const script = [
+      SEAL_INBOX,
+      'n="$2$3"; i=0',
+      'while [ -e "$1/$n" ]; do i=$((i+1)); [ "$i" -le 100 ] || exit 3; n="$2-$i$3"; done',
+      'base64 -d > "$1/$n" && chmod 644 "$1/$n" && printf %s "$n"',
+    ].join('\n')
+    return {
+      publish: async (name, data) => {
+        await provision(conversation)
+        const { stem, extension } = splitName(name)
+        const command = `sudo -n sh -c ${quoteArgument(script)} sh ${[directory, stem, extension].map(quoteArgument).join(' ')}`
+        const written = await runInWorkdir(command, Buffer.from(data).toString('base64'), identity.home)
+        return `${directory}/${written.trim()}`
+      },
+    }
+  }
+  const files: WecomFiles | undefined = fileStore === undefined ? undefined : {
+    list: (session, box) => fileStore.list(session, box),
+    exists: async (session, box, names) => {
+      const found: string[] = []
+      const missing: string[] = []
+      for (const name of names) (await fileStore.exists(session, box, name) ? found : missing).push(name)
+      return { found, missing }
+    },
+    pull: async (session, box, names, maxBytes) => {
+      const workdir = workdirs.get(session)
+      if (workdir === undefined) throw new Error('wecom: this Session is not an authenticated WeCom conversation')
+      const directory = `${workdir.cwd}/${box}`
+      const sizes = new Map((await fileStore.list(session, box)).map(entry => [entry.name, entry.size]))
+      const wanted = names ?? [...sizes.keys()]
+      for (const name of wanted) {
+        if (!isBoxName(name)) throw new Error(`wecom: ${JSON.stringify(name)} is not a plain file name`)
+        if (!sizes.has(name)) throw new Error(`wecom: the ${box} holds no file named ${JSON.stringify(name)}`)
+      }
+      const listing = await runInWorkdir(`ls -1A -- ${quoteArgument(directory)} 2>/dev/null || true`, '', workdir.cwd)
+      const present = new Set(listing.split('\n').filter(line => line !== ''))
+      const pulled: string[] = []
+      const skipped: string[] = []
+      let remaining = maxBytes
+      for (const name of wanted) {
+        if (present.has(name)) {
+          skipped.push(name)
+          continue
+        }
+        // The listing's size bounds the download before any byte is fetched.
+        const size = sizes.get(name) ?? 0
+        if (size > remaining) throw new Error(`wecom: pulling ${JSON.stringify(name)} would exceed the ${String(maxBytes)}-byte limit`)
+        const data = await fileStore.get(session, box, name)
+        remaining -= data.byteLength
+        await runInWorkdir(writeCommand(directory, name, workdir.user, box === 'inbox'), Buffer.from(data).toString('base64'), workdir.cwd)
+        pulled.push(name)
+      }
+      return { directory, pulled, skipped }
+    },
+  }
   ctx.provide('wecom', {
+    files,
     send: async (sessionId: string, outbound: WecomOutbound): Promise<WecomDelivered> => {
       const target = sendTargets.get(sessionId)
       if (target === undefined) throw new Error('wecom: this Session is not an authenticated WeCom conversation')
+      // Queue every outbound attachment for the session's outbox before the
+      // delivery, so a delivery failure still leaves a record of what the Agent
+      // produced; the upload runs in the background and never delays delivery.
+      for (const file of outbound.files ?? []) fileStore?.enqueue(sessionId, 'outbox', file.name, file.data)
       const delivered = await sendToChat(target.client, target.chatid, outbound)
       // A tool already put this turn's attachments in the chat, so the closing
       // text has to follow them instead of completing the anchored reply.
@@ -414,7 +610,15 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
     let content: ContentBlock[]
     try {
       const signal = AbortSignal.any([lifetime.signal, AbortSignal.timeout(config.attachmentTimeoutMs)])
-      content = await admitMessageContent(ctx.attachments, messageParts(message), config.maxAttachmentBytes, signal, inbox)
+      content = await admitMessageContent(
+        ctx.attachments,
+        messageParts(message),
+        config.maxAttachmentBytes,
+        signal,
+        inboxFor(conversation),
+        fileStore,
+        conversation.id,
+      )
     } catch {
       ctx.logger.warn('wecom attachment admission failed')
       if (!interrupted()) await stream.finish(copy.attachmentFailed)
@@ -425,28 +629,16 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
       const identity = conversation.identity
       const cwd = conversationCwd(config, identity)
       const setup = async (agentCtx: Context): Promise<void> => {
-        // The deployment-wide providers already hold these names, so the
-        // conversation's own providers are mounted below an isolated scope and
-        // the Agent's preset joins that scope: its tools then resolve the
-        // conversation's connections instead of the deployment-wide ones.
-        let scope = agentCtx
-        if (identity !== undefined && sshTarget !== undefined && sessionShell !== undefined) {
-          // The login must exist before its providers connect, and the alias
-          // before those connections resolve.
-          await ensureSessionUser(sessionShell, identity,
-            config.sessionUserScript ?? '/usr/local/sbin/dsh-session-user', sshTarget.publicKey, config.attachmentTimeoutMs)
-          await ensureSessionAlias(identity, sshTarget, sshConfigPath)
-          scope = SESSION_SERVICES.reduce((inner, name) => inner.isolate(name), agentCtx)
-          await mountSessionProviders(scope, identity, config)
-        }
-        await mountPreset?.(scope)
+        // The login must exist before the Agent's tools reach the container,
+        // and the alias before any of its connections resolve.
+        await provision(conversation)
+        await mountPreset?.(agentCtx)
         installModelSelection(agentCtx, { current: selection, assembled: undefined })
       }
       const agentOptions = { provider: selection.provider, model: selection.model }
-      // No persisted conversation takes the random-id path, and a resumed one
-      // falls back to creation while its log is still absent.
-      const sessionId = conversation.sessionId ?? SessionId(`wecom-${randomUUID()}`)
-      const handle = conversation.sessionId === undefined
+      // A resumable conversation falls back to creation while its log is still absent.
+      const sessionId = conversation.id
+      const handle = !conversation.resumable
         ? await ctx.agents.create({
           sessionId,
           signal: lifetime.signal,
@@ -475,6 +667,7 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
             : message.body.from.userid,
           delivered: false,
         })
+        workdirs.set(handle.agent.session.id, { cwd, ...identity === undefined ? {} : { user: identity.user } })
       } catch (error: unknown) {
         await handle.dispose()
         throw error
@@ -582,7 +775,8 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
     if (conversation === undefined) {
       conversation = {
         tail: Promise.resolve(),
-        ...config.resumeConversations ? { sessionId: conversationSessionId(config.botId, key) } : {},
+        id: config.resumeConversations ? conversationSessionId(config.botId, key) : SessionId(`wecom-${randomUUID()}`),
+        resumable: config.resumeConversations === true,
         ...config.sessionHomeRoot === undefined || config.sessionSshHost === undefined
           ? {}
           : { identity: sessionIdentity(config.botId, key, config.sessionHomeRoot, config.sessionSshHost) },
@@ -643,7 +837,12 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
       pending.clear()
       recent.clear()
       sendTargets.clear()
+      workdirs.clear()
       await presetScope?.[Symbol.asyncDispose]()
+      // Queued uploads get the attachment deadline to finish; the rest are
+      // abandoned, and mirror mode still holds their local copies.
+      const abandoned = await fileStore?.drain(config.attachmentTimeoutMs) ?? 0
+      if (abandoned > 0) ctx.logger.warn('wecom file store abandoned %d upload(s) at shutdown', abandoned)
       const failures = disposed.filter(result => result.status === 'rejected')
       if (failures.length > 0) throw new AggregateError(failures.map(result => result.reason), 'wecom Agent disposal failed')
     }

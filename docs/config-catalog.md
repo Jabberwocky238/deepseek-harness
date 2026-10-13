@@ -4482,7 +4482,7 @@ export interface Config {
 ## `@deepseek-ai/dsh-wecom`
 
 - `inject`: `agents` · `sessions` · `credentials` · `agentDefaultModel` · `permissionPresets` · `attachments` · `sessionProjections` · `tools`
-- `source`: [`packages/interaction/wecom/src/index.ts:44`](../packages/interaction/wecom/src/index.ts)
+- `source`: [`packages/interaction/wecom/src/index.ts:53`](../packages/interaction/wecom/src/index.ts)
 
 ```ts config-catalog
 /** Connection, admission, and Agent settings for one WeCom bot. */
@@ -4493,8 +4493,25 @@ export interface Config {
   secretEnv: string
   /** Exact WeCom user ids allowed to invoke the Agent; "*" allows everyone and an empty list denies everyone. */
   allowedUsers: string[]
-  /** Existing absolute working directory shared by this bot's Agents. */
-  workspacePath: string
+  /**
+   * Absolute root under which each conversation gets its own login and home
+   * directory. Configured together with {@link sessionSshHost}, it switches this
+   * bot to one container login per conversation; leaving both unset keeps every
+   * conversation in {@link workspacePath}.
+   */
+  sessionHomeRoot?: string
+  /**
+   * Deployment-owned OpenSSH alias addressing this bot's container. Each
+   * conversation's alias is generated from it, and its public key is installed
+   * for every conversation's login.
+   */
+  sessionSshHost?: string
+  /** Container-side provisioner creating a conversation's login, home and key. */
+  sessionUserScript: string
+  /** Host-side OpenSSH include file receiving one alias per conversation. */
+  sessionSshConfig: string
+  /** Existing absolute working directory shared by this bot's Agents, in single-workspace mode. */
+  workspacePath?: string
   /** Permission preset applied before the first input is admitted. */
   permissionPreset: string
   /** Optional Agent preset; omission uses globally mounted capabilities. */
@@ -4523,7 +4540,10 @@ export interface Config {
   /**
    * Absolute directory inside the Agent's own filesystem where inbound
    * attachments are saved and named in the prompt, so the Agent can open the
-   * bytes with its tools whatever their format is.
+   * bytes with its tools whatever their format is. Single-workspace mode only:
+   * a conversation-scoped bot publishes each conversation's attachments to
+   * `<home>/inbox/`, owned by root so the conversation can read but not change
+   * them.
    */
   inboundDir: string
   /**
@@ -4553,6 +4573,49 @@ export interface Config {
   heartbeatIntervalMs: number
   /** Language of transport status replies. */
   language: 'zh' | 'en'
+  /**
+   * Per-session inbox/outbox file storage, backed by an S3-compatible bucket.
+   * Off by default. When enabled, inbound attachments are stored under
+   * `<prefix>/<session>/inbox/` and outbound attachments under
+   * `<prefix>/<session>/outbox/`.
+   * Storage runs in the background: neither a message nor a delivery waits for
+   * the upload.
+   */
+  fileStore?: {
+    /** Whether per-session file storage is active. */
+    enabled: boolean
+    /** `mirror` keeps a local copy beside the bucket; `s3only` writes only the bucket. */
+    mode: 'mirror' | 's3only'
+    /** S3-compatible endpoint, bucket and static credentials; required when enabled. */
+    s3?: {
+      /** Endpoint URL, such as `https://cos.ap-beijing.myqcloud.com` or a MinIO address. */
+      endpoint: string
+      /** Bucket receiving `<prefix>/<session>/inbox/` and `<prefix>/<session>/outbox/` objects. */
+      bucket: string
+      /** Signing region; omission leaves the SDK's own default. */
+      region?: string
+      /** Access key id of the static credential. */
+      accessKeyId: string
+      /** Credential reference containing the secret access key. */
+      secretAccessKeyEnv: string
+      /** Address the bucket in the URL path rather than the host name, as MinIO expects; Tencent COS refuses it, so turn it off there. */
+      forcePathStyle: boolean
+    }
+    /** Host-side root of the local mirror; required in `mirror` mode. */
+    localRoot?: string
+    /**
+     * Key prefix every stored object sits under, so the bucket root holds no
+     * files. Omission uses this package's published name, such as
+     * `@jabberwocky238/dsh-wecom`.
+     */
+    prefix?: string
+    /** Multipart part size in bytes, at least 5 MiB; a file no larger than one part is a single upload. */
+    partSize: number
+    /** Parts of one file uploaded concurrently. */
+    partConcurrency: number
+    /** Files the background queue uploads concurrently. */
+    uploadConcurrency: number
+  }
 }
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-wecom -->

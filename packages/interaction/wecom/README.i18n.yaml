@@ -18,8 +18,11 @@
   en: 1030c7bdbb6d0cfa
   zh: 7cd3cc62b12a7d55
 /deepseek-ai-dsh-wecom/use-this-package/one-container-login-per-conversation:
-  en: 649d2129c566bacc
-  zh: 0791c59d9c0de719
+  en: 75a1d40776de2d89
+  zh: 7673f0ec64af9fcf
+/deepseek-ai-dsh-wecom/use-this-package/per-session-file-storage:
+  en: 09a7f2ef31528e0c
+  zh: 0d768bf07cd052ec
 /deepseek-ai-dsh-wecom/understand-the-implementation:
   en: 81d575f01b219c10
   zh: f3cec9c2f7ba4b6a

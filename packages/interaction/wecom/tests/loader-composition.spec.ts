@@ -133,7 +133,7 @@ async function harness(
     maxInputBytes: 16384, maxReplyBytes: 20480, replyIntervalMs: 500,
     runTimeoutMs: 120000, reconnectIntervalMs: 1000, maxReconnectAttempts: 10, maxAuthFailureAttempts: 5, heartbeatIntervalMs: 30000,
     permissionPreset: 'read-only', wsUrl: `ws://127.0.0.1:${String(address.port)}`, language: 'en',
-    inboundDir: '/home/agent/inbox', ...overrides,
+    inboundDir: '/home/agent/inbox', sessionUserScript: '/usr/local/sbin/dsh-session-user', sessionSshConfig: '~/.ssh/dsh-sessions.conf', ...overrides,
   }
   const config = Wecom.Config(rawConfig)
   const dependencies = {

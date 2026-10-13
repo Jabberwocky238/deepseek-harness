@@ -1,7 +1,7 @@
 /** Bounded WeCom downloads, SDK decryption, container inbox materialization, and durable prompt attachment admission. */
 
 import { mkdir, writeFile } from 'node:fs/promises'
-import { join } from 'node:path'
+import { basename, join } from 'node:path'
 import { decryptFile } from '@wecom/aibot-node-sdk'
 import { parse } from 'content-disposition'
 import sharp from 'sharp'
@@ -9,6 +9,7 @@ import type { AttachmentStore, AttachmentAdmissionPart } from '@deepseek-ai/dsh-
 import type { ContentBlock } from '@deepseek-ai/dsh-llm'
 import { assertNever } from '@deepseek-ai/dsh-util-values'
 import type { MessagePart } from './message.ts'
+import type { FileStore } from './file-store.ts'
 
 /** The image formats the model can be shown directly, with their admitted media type and inbox extension. */
 const VISION_FORMATS: Record<string, { mediaType: 'image/png' | 'image/jpeg' | 'image/webp' | 'image/gif'; extension: string }> = {
@@ -18,8 +19,51 @@ const VISION_FORMATS: Record<string, { mediaType: 'image/png' | 'image/jpeg' | '
   gif: { mediaType: 'image/gif', extension: 'gif' },
 }
 
-/** One inbox directory: the path the Agent sees, and the host path bound to it. */
-type InboundInbox = { agentDir: string; hostDir: string }
+/**
+ * Where inbound attachments are published for the Agent to read. `publish`
+ * writes one file without overwriting an earlier one — a name already present
+ * becomes a sibling (`report-1.docx`) — and returns the path the Agent opens.
+ */
+export interface InboundInbox {
+  /**
+   * Publish one attachment.
+   * @param name - one plain path segment, the preferred file name.
+   * @param data - exact file bytes.
+   * @returns the path, in the Agent's own filesystem, of the file written.
+   */
+  publish(name: string, data: Uint8Array): Promise<string>
+}
+
+/** Split a file name into the stem and extension sibling names are built from. */
+export function splitName(name: string): { stem: string; extension: string } {
+  const dot = name.lastIndexOf('.')
+  return dot > 0 ? { stem: name.slice(0, dot), extension: name.slice(dot) } : { stem: name, extension: '' }
+}
+
+/**
+ * An inbox the plugin writes on the host, bound into the Agent's filesystem by
+ * the deployment (single-workspace mode).
+ * @param agentDir - the directory as the Agent sees it, named in the prompt.
+ * @param hostDir - the same directory on the host, where the bytes are written.
+ * @returns the inbox.
+ */
+export function hostInbox(agentDir: string, hostDir: string): InboundInbox {
+  return {
+    publish: async (name, data) => {
+      await mkdir(hostDir, { recursive: true })
+      const { stem, extension } = splitName(name)
+      for (let attempt = 0; ; attempt += 1) {
+        const unique = attempt === 0 ? name : `${stem}-${attempt}${extension}`
+        try {
+          await writeFile(join(hostDir, unique), data, { flag: 'wx' })
+          return join(agentDir, unique)
+        } catch (error: unknown) {
+          if ((error as NodeJS.ErrnoException).code !== 'EEXIST' || attempt >= 100) throw error
+        }
+      }
+    },
+  }
+}
 
 async function download(media: { url: string; aeskey?: string | undefined }, maxBytes: number, signal: AbortSignal) {
   const response = await fetch(media.url, { signal, redirect: 'error' })
@@ -40,7 +84,23 @@ async function download(media: { url: string; aeskey?: string | undefined }, max
   if (data.byteLength > maxBytes) throw new Error('WeCom attachment exceeds the byte limit')
   const disposition = response.headers.get('content-disposition')
   const name = disposition === null ? undefined : parse(disposition).parameters['filename']
-  return { data, ...name === undefined ? {} : { name } }
+  return { data, ...name === undefined ? {} : { name: decodePercent(name) } }
+}
+
+/**
+ * WeCom sends the plain `filename` parameter percent-encoded (`Jingyu%2BShen.pdf`,
+ * `%E6%8A%A5%E5%91%8A.pdf`), so a name carrying escapes is decoded. A name whose
+ * `%` is not a valid escape (`50%off.pdf`) is kept as given; separators a decode
+ * may produce are removed afterwards by {@link safeBaseName}.
+ */
+function decodePercent(name: string): string {
+  if (!/%[0-9A-Fa-f]{2}/u.test(name)) return name
+  try {
+    return decodeURIComponent(name)
+  } catch {
+    // URIError: a stray `%` beside valid escapes; the name is not an encoding.
+    return name
+  }
 }
 
 /** Reduce a callback filename to one path segment the inbox may hold. */
@@ -51,23 +111,20 @@ function safeBaseName(name: string | undefined, fallback: string): string {
 
 /**
  * Publish one attachment into the inbox and return the path the Agent reads.
- * A name already present is kept as a sibling (`report-1.docx`) rather than
- * overwriting the earlier file, so a repeated name never loses history.
+ * When a file store is configured, the same bytes are also queued for its inbox
+ * under the conversation's Session id and the published file name; the upload
+ * runs in the background, so the message is admitted without waiting for it.
  */
-async function materialize(inbox: InboundInbox, name: string, data: Uint8Array): Promise<string> {
-  await mkdir(inbox.hostDir, { recursive: true })
-  const dot = name.lastIndexOf('.')
-  const stem = dot > 0 ? name.slice(0, dot) : name
-  const extension = dot > 0 ? name.slice(dot) : ''
-  for (let attempt = 0; ; attempt += 1) {
-    const unique = attempt === 0 ? name : `${stem}-${attempt}${extension}`
-    try {
-      await writeFile(join(inbox.hostDir, unique), data, { flag: 'wx' })
-      return join(inbox.agentDir, unique)
-    } catch (error: unknown) {
-      if ((error as NodeJS.ErrnoException).code !== 'EEXIST' || attempt >= 100) throw error
-    }
-  }
+async function materialize(
+  inbox: InboundInbox,
+  name: string,
+  data: Uint8Array,
+  fileStore?: FileStore,
+  session?: string,
+): Promise<string> {
+  const path = await inbox.publish(name, data)
+  if (fileStore !== undefined && session !== undefined) fileStore.enqueue(session, 'inbox', basename(path), data)
+  return path
 }
 
 /** The prompt part that tells the Agent where one delivered attachment landed. */
@@ -105,10 +162,11 @@ async function visionFormat(data: Uint8Array, store: AttachmentStore) {
  * @param parts - validated text, voice and attachment references in message order.
  * @param maxBytes - aggregate decrypted attachment byte limit for this message.
  * @param signal - cancellation and deadline covering downloads and admission.
- * @param inbox - container inbox to publish attachments into, when configured.
- *   The Agent's filesystem provider has no binary write, so the directory is
- *   bound into the container by the deployment and the plugin writes its host
- *   side; `agentDir` is the path the prompt names.
+ * @param inbox - where attachments are published for the Agent, when configured;
+ *   the path it returns is the one the prompt names.
+ * @param fileStore - per-session inbox/outbox storage, when enabled. Each
+ *   materialized attachment is also queued for `session`'s inbox.
+ * @param session - the conversation's Session id keying the stored file.
  * @returns ordered content carrying durable references, with no download URLs or keys.
  * @throws on download, decryption, size, storage, inbox-write, or cancellation failure.
  */
@@ -118,6 +176,8 @@ export async function admitMessageContent(
   maxBytes: number,
   signal: AbortSignal,
   inbox?: InboundInbox,
+  fileStore?: FileStore,
+  session?: string,
 ): Promise<ContentBlock[]> {
   const content: AttachmentAdmissionPart[] = []
   let remaining = maxBytes
@@ -141,7 +201,7 @@ export async function admitMessageContent(
         const format = await visionFormat(input.data, store)
         if (inbox !== undefined) {
           content.push(inboxNote(
-            await materialize(inbox, safeBaseName(input.name, format === undefined ? 'image.bin' : `image.${format.extension}`), input.data),
+            await materialize(inbox, safeBaseName(input.name, format === undefined ? 'image.bin' : `image.${format.extension}`), input.data, fileStore, session),
             '图片',
             input.data,
           ))
@@ -162,7 +222,7 @@ export async function admitMessageContent(
         content.push(inbox === undefined
           ? { type: 'file', attachment: await store.saveFile(input) }
           : inboxNote(
-            await materialize(inbox, safeBaseName(input.name, video ? 'video.mp4' : 'file'), input.data),
+            await materialize(inbox, safeBaseName(input.name, video ? 'video.mp4' : 'file'), input.data, fileStore, session),
             video ? '视频' : '文件',
             input.data,
           ))

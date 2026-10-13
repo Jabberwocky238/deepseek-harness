@@ -5,7 +5,7 @@ import { Context } from '@deepseek-ai/cordis'
 import LocalAttachments from '@deepseek-ai/dsh-attachment-local'
 import sharp from 'sharp'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { admitMessageContent } from '../src/attachments.ts'
+import { admitMessageContent, hostInbox } from '../src/attachments.ts'
 import { mediaPeer } from './media-peer.ts'
 
 let ctx: Context
@@ -88,4 +88,19 @@ it('cancels an outstanding download', async () => {
   await vi.waitFor(() => { expect(peer.requests).toBe(1) })
   controller.abort(new Error('cancelled'))
   await rejected
+})
+
+it.each([
+  ['Jingyu%2BShen.pdf', 'Jingyu+Shen.pdf'],
+  ['%E6%8A%A5%E5%91%8A.pdf', '报告.pdf'],
+  ['50%off.pdf', '50%off.pdf'],
+  ['..%2Fescape.txt', 'escape.txt'],
+])('decodes the percent-encoded filename %s before publishing it to the inbox', async (sent, saved) => {
+  await using peer = await mediaPeer()
+  const file = peer.add(Buffer.from('x'), { disposition: `attachment; filename="${sent}"` })
+  const inbox = hostInbox('/home/agent/inbox', join(root, 'inbox'))
+  const [note] = await admitMessageContent(ctx.attachments, [{ msgtype: 'file', file }], 100, new AbortController().signal, inbox)
+  if (note?.type !== 'text') throw new Error('Missing inbox note')
+  expect(note.text).toContain(`/home/agent/inbox/${saved}（`)
+  expect(await readFile(join(root, 'inbox', saved), 'utf8')).toBe('x')
 })

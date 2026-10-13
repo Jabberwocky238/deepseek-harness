@@ -1,5 +1,5 @@
 ---
-description: "面向模型的 sendfile 工具：把 Agent 自己文件系统里的附件投递到调用它的那个 Session 所在的企微会话。"
+description: "面向模型的企微文件工具：sendfile 把 Agent 自己文件系统里的附件投递到调用它的那个 Session 所在的会话，syncbox 列出、检查并取回该 Session 已存的文件。"
 kind: "package-reference"
 ---
 
@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-`@deepseek-ai/dsh-tool-wecom` 只注册一个工具 `sendfile`，把 Agent 自己文件系统里的附件投递到调用它的那个 Session 所在的企微会话。它只带附件：人们读的是普通回复正文，多一条文本通道只会把正文说两遍。会话不是由模型指定的——投递 seam 从 Session 解析目标——所以一次调用无法发往机器人没有连接的会话。与企微机器人和文件系统提供方一起挂载。
+`@deepseek-ai/dsh-tool-wecom` 注册 `sendfile`，把 Agent 自己文件系统里的附件投递到调用它的那个 Session 所在的企微会话。它只带附件：人们读的是普通回复正文，多一条文本通道只会把正文说两遍。会话不是由模型指定的——投递 seam 从 Session 解析目标——所以一次调用无法发往机器人没有连接的会话。机器人存储文件时，`syncbox` 列出、检查并取回该 Session 已存的 inbox 与 outbox。与企微机器人和文件系统提供方一起挂载。
 
 ## 目录
 
@@ -24,7 +24,7 @@ kind: "package-reference"
 <a id="use-this-package"></a>
 ## 使用本包
 
-在提供 `tools`、企微连接和文件系统提供方的 profile 里挂载本插件。它注册 `sendfile`，没有配置字段。
+在提供 `tools`、企微连接和文件系统提供方的 profile 里挂载本插件。它注册 `sendfile`，机器人存储文件时还注册 `syncbox`；没有配置字段。
 
 ```json
 {"files":[{"path":"report.pdf","kind":"file"},{"path":"chart.png","kind":"image","media_type":"image/png"}]}
@@ -33,6 +33,8 @@ kind: "package-reference"
 每一项给出一个由文件系统提供方解析的路径——相对路径以该 Session 的工作目录为基准——以及会话应当按哪种类型处理。图片还必须给 `media_type`。附件按给定顺序到达，名字取路径的最后一段。
 
 一次调用最多发布 20 个附件、合计 20 MiB，所以更大的批次要分几次调用。结果报告发布了多少个附件。
+
+当企微插件启用 `fileStore` 时，本包还会为调用方 Session 的已存文件注册 `syncbox`。`list` 返回 `inbox` 或 `outbox` 里的每个文件及其大小，`exists` 把给定文件名分成存在与缺失两组；两者都只读对象元数据。`pull` 把文件复制到 `<工作目录>/<box>/`：给定的文件名，或该目录里还没有的所有已存文件，已存在的跳过；20 MiB 的预算在下载前就按列出的大小检查。`sendfile` 投递的每个附件也会存进 outbox。
 
 -----
 

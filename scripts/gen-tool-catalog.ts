@@ -246,15 +246,23 @@ const TOOL_PACKAGES: ToolPackage[] = [
     dir: 'tool-wecom',
     source: 'packages/interaction/tool-wecom/src/index.ts',
     requires: ['ctx.tools', 'ctx.wecom', 'ctx.fs'],
-    writes: ['tool/call', 'tool/result', 'attachment delivered to a WeCom chat'],
+    writes: ['tool/call', 'tool/result', 'attachment delivered to a WeCom chat', 'file pulled into the working directory'],
     async mount(ctx) {
-      // Schema harvest never delivers: the tool's schema is independent of what a
-      // delivery returns, so the seam only has to exist.
-      ctx.provide('wecom', { send: () => Promise.resolve({ text: false, files: 0 }) })
+      // Schema harvest never delivers or reads: the tools' schemas are independent
+      // of what the seams return, so the seams only have to exist. `files` is
+      // present so the store-dependent `syncbox` registers too.
+      ctx.provide('wecom', {
+        send: () => Promise.resolve({ text: false, files: 0 }),
+        files: {
+          list: () => Promise.resolve([]),
+          exists: () => Promise.resolve({ found: [], missing: [] }),
+          pull: () => Promise.resolve({ directory: '', pulled: [], skipped: [] }),
+        },
+      })
       await ctx.plugin(ToolWecom)
     },
     note:
-      'sendfile carries attachments only and never names a chat: the delivery seam resolves the target from the Session, so the schema is independent of any bot identity or configuration. The package ships with the fork\'s WeCom plugin, not with a default profile.',
+      'sendfile carries attachments only and never names a chat: the delivery seam resolves the target from the Session, so the schema is independent of any bot identity or configuration. syncbox registers only when the bot enables `fileStore`. The package ships with the fork\'s WeCom plugin, not with a default profile.',
   },
   {
     pkg: '@deepseek-ai/dsh-tools',

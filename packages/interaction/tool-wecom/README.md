@@ -1,5 +1,5 @@
 ---
-description: "Model-facing sendfile tool: delivers attachments from the Agent's filesystem into the WeCom chat the calling Session answers in."
+description: "Model-facing WeCom file tools: sendfile delivers attachments from the Agent's filesystem into the chat the calling Session answers in, and syncbox lists, checks and pulls the Session's stored files."
 kind: "package-reference"
 ---
 
@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-`@deepseek-ai/dsh-tool-wecom` registers one tool, `sendfile`, which delivers attachments from the Agent's own filesystem into the WeCom chat the calling Session answers in. It carries attachments only: the ordinary reply text is what the people read, so there is no text parameter to duplicate it. The model never names a conversation — the delivery seam resolves the target from the Session — so a call cannot address a chat the bot is not connected to. Mount it beside a WeCom bot and a filesystem provider.
+`@deepseek-ai/dsh-tool-wecom` registers `sendfile`, which delivers attachments from the Agent's own filesystem into the WeCom chat the calling Session answers in. It carries attachments only: the ordinary reply text is what the people read, so there is no text parameter to duplicate it. The model never names a conversation — the delivery seam resolves the target from the Session — so a call cannot address a chat the bot is not connected to. When the bot stores files, `syncbox` lists, checks and pulls the Session's stored inbox and outbox. Mount it beside a WeCom bot and a filesystem provider.
 
 ## Table of Contents
 
@@ -24,7 +24,7 @@ English | [中文](README.zh.md)
 <a id="use-this-package"></a>
 ## Use this package
 
-Mount the plugin in a profile that provides `tools`, a WeCom connection, and a filesystem provider. It registers `sendfile` and has no configuration fields.
+Mount the plugin in a profile that provides `tools`, a WeCom connection, and a filesystem provider. It registers `sendfile`, plus `syncbox` when the bot stores files, and has no configuration fields.
 
 ```json
 {"files":[{"path":"report.pdf","kind":"file"},{"path":"chart.png","kind":"image","media_type":"image/png"}]}
@@ -33,6 +33,8 @@ Mount the plugin in a profile that provides `tools`, a WeCom connection, and a f
 Each entry names a path the filesystem provider resolves — a relative path resolves against the Session's working directory — together with the kind the chat should treat it as. Images also require `media_type`. Attachments arrive in the order given, named by the path's last segment.
 
 One call publishes at most 20 attachments within a 20 MiB budget, so a larger batch is several calls. The result reports how many attachments were published.
+
+When the WeCom plugin enables `fileStore`, the package also registers `syncbox` for the calling Session's stored files. `list` returns every file in the `inbox` or `outbox` with its size, and `exists` splits given names into found and missing; both read object metadata only. `pull` copies files into `<working directory>/<box>/`: the names given, or every stored file that directory lacks, skipping files already present, within a 20 MiB budget checked against the listed sizes before any download. Each delivered `sendfile` attachment is also stored in the outbox.
 
 -----
 

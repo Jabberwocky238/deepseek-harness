@@ -23,7 +23,7 @@
 | `@deepseek-ai/dsh-mcp-resources` | `list_mcp_resource_templates`, `list_mcp_resources`, `read_mcp_resource` | `ctx.tools`, `ctx.mcpResources` | `tool/call`, `tool/result` | - | - |
 | `@deepseek-ai/dsh-experimental-browser-use-stagehand-native` | `stagehand_act`、`stagehand_extract`、`stagehand_navigate`、`stagehand_observe`、`stagehand_screenshot`、`stagehand_tabs` | `ctx.browserUse`、`ctx.agents`、`ctx.tools`、`ctx.systemPrompt` | `tool/call`、`tool/result` | - | - |
 | `@deepseek-ai/dsh-tool-ask-user` | `ask_user_question` | `ctx.tools`、`ctx.userQuestions` | `tool/call`、`tool/result after an answer or timeout`、`late user/message` | - | ask_user_question 默认保持原有阻塞行为；设置 `mode: timed` 后才启用前台超时与 pending 结果，同时问题仍可回答；timed 模式内 `timeout: -1` 让本次调用无限期阻塞。 |
-| `@deepseek-ai/dsh-tool-wecom` | `sendfile` | `ctx.tools`、`ctx.wecom`、`ctx.fs` | `tool/call`、`tool/result`、`attachment delivered to a WeCom chat` | - | sendfile 只送附件，也从不指定会话：投递 seam 从 Session 解析目标，所以与任何机器人身份或配置无关。该包随本 fork 的企微插件一起提供，不在任何默认 profile 里。 |
+| `@deepseek-ai/dsh-tool-wecom` | `sendfile`、`syncbox` | `ctx.tools`、`ctx.wecom`、`ctx.fs` | `tool/call`、`tool/result`、`attachment delivered to a WeCom chat`、`file pulled into the working directory` | - | sendfile 只送附件，也从不指定会话：投递 seam 从 Session 解析目标，所以与任何机器人身份或配置无关。syncbox 仅在机器人启用 `fileStore` 时注册。该包随本 fork 的企微插件一起提供，不在任何默认 profile 里。 |
 | `@deepseek-ai/dsh-tools` | `run_code` | `ctx.workingDirectory (Agent executions)`、`ctx.tools`、`ctx.ptcRuntime (execution time)`、`ctx.systemPrompt` | `tool/call`、`one tool/ptc-dispatch-start + tool/ptc-dispatch pair per bridged sub-call`、`tool/result` | - | 在 `mode: ptc` 下，它由工具注册表所有，作为可过滤能力层之外的保留传输机制（参见 PTC mode Agent Note）。在 `ptc` 下，它是注册表对协议格式（wire format）的唯一贡献；其他可见能力在使用已加载运行时语言生成的 SDK 章节中声明。程序通过 binding 调用这些能力，调用按照原生并发约定调度：启动顺序和策略遵循提交顺序，并发安全的函数体最多重叠执行 `maxParallelSubCalls` 个。调用会重新进入完整且受守卫保护的工具流水线，并将每个嵌套执行关联到此外层结果。 |
 | `@deepseek-ai/dsh-plan-mode` | `exit_plan_mode` | `ctx.tools`、`ctx.systemPrompt`、`ctx.userQuestions (execution time, opportunistic)` | `tool/call`、`plan/mode inactive on an approved review`、`tool/result` | - | 规划未激活时，exit_plan_mode 仍保留在面向模型的 schema 中，这样状态转换不会在规划策略变更之外额外造成工具目录变动。其执行路径会拒绝规划模式之外的调用；在规划模式下，它通过用户交互 seam 提交计划（批准／根据反馈继续规划），批准后会在步骤边界记录规划模式已停用。 |
 | `@deepseek-ai/dsh-tool-bash` | `bash` | `ctx.workingDirectory`、`ctx.tools`、`ctx.shell`、`ctx.systemPrompt`、`ctx.shellEnv`、`ctx.jobs for run_in_background and the job-backed foreground path` | `tool/call`、`tool/result` | - | bash 工具是 bash 执行器 seam 面向模型的消费方。组合中有 job 注册表时，每次调用一启动就注册到通用 `ctx.jobs` 运行时，并通过 `job_*` 工具（来自 `@deepseek-ai/dsh-tool-jobs`）收集／停止；没有注册表或 `enableRunInBackground: false` 时，工具注册不带 `run_in_background` 参数的纯前台 schema。 |
@@ -580,7 +580,49 @@ ask_user_question 默认保持原有阻塞行为；设置 `mode: timed` 后才�
 
 Source: [`packages/interaction/tool-wecom/src/index.ts`](../packages/interaction/tool-wecom/src/index.ts)
 
-sendfile 只送附件，也从不指定会话：投递 seam 从 Session 解析目标，所以与任何机器人身份或配置无关。该包随本 fork 的企微插件一起提供，不在任何默认 profile 里。
+### `syncbox`
+
+检查并取回本会话的文件。inbox 存放别人发给你的文件；outbox 存放你用 sendfile 发出的文件。`list` 列出每个已存文件及其大小；`exists` 检查给定的文件名；`pull` 把已存文件复制到你工作目录下的 inbox/ 或 outbox/ —— 只取你点名的文件，或所有目录里还没有的文件 —— 所以不会取回你不需要的东西。
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "action": {
+      "type": "string",
+      "description": "list, exists, or pull.",
+      "enum": [
+        "list",
+        "exists",
+        "pull"
+      ]
+    },
+    "box": {
+      "type": "string",
+      "description": "inbox for files sent to you, outbox for files you sent.",
+      "enum": [
+        "inbox",
+        "outbox"
+      ]
+    },
+    "names": {
+      "type": "array",
+      "description": "File names. Required for exists; for pull, omit to fetch every file not already in your working directory.",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "required": [
+    "action",
+    "box"
+  ]
+}
+```
+
+Source: [`packages/interaction/tool-wecom/src/index.ts`](../packages/interaction/tool-wecom/src/index.ts)
+
+sendfile 只送附件，也从不指定会话：投递 seam 从 Session 解析目标，所以与任何机器人身份或配置无关。syncbox 仅在机器人启用 `fileStore` 时注册。该包随本 fork 的企微插件一起提供，不在任何默认 profile 里。
 
 <a id="deepseek-aidsh-tools"></a>
 

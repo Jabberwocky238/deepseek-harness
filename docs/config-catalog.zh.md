@@ -4098,6 +4098,23 @@ export interface Config {
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-tool-subagent -->
 
+<!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-tool-talk -->
+<a id="deepseek-aidsh-tool-talk"></a>
+
+## `@deepseek-ai/dsh-tool-talk`
+
+- `inject`: `tools` · `talk`
+- `source`: [`packages/interaction/tool-talk/src/index.ts:90`](../packages/interaction/tool-talk/src/index.ts)
+
+```ts config-catalog
+/** Plugin configuration as authored in `cordis.yml`. */
+export interface Config {
+  /** Longest message one `talk` call may carry, in characters. */
+  maxMessageChars: number
+}
+```
+<!-- END GENERATED config-catalog:@deepseek-ai/dsh-tool-talk -->
+
 <!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-tool-terminal -->
 <a id="deepseek-aidsh-tool-terminal"></a>
 
@@ -4497,7 +4514,7 @@ export interface Config {
 ## `@deepseek-ai/dsh-wecom`
 
 - `inject`: `agents` · `sessions` · `credentials` · `agentDefaultModel` · `permissionPresets` · `attachments` · `sessionProjections` · `tools`
-- `source`: [`packages/interaction/wecom/src/index.ts:54`](../packages/interaction/wecom/src/index.ts)
+- `source`: [`packages/interaction/wecom/src/index.ts:55`](../packages/interaction/wecom/src/index.ts)
 
 ```ts config-catalog
 /** Connection, admission, and Agent settings for one WeCom bot. */
@@ -4548,6 +4565,12 @@ export interface Config {
   wsUrl: string
   /** Maximum retained conversations until plugin reload. */
   maxConversations: number
+  /**
+   * Messages a conversation accepts in a row through `talk` before its own
+   * people speak again. The plugin provides the `talk` service only in
+   * conversation-scoped mode with `resumeConversations`.
+   */
+  talkMaxRelays: number
   /** Maximum accepted messages across active and queued work. */
   maxPendingMessages: number
   /** Number of completed message ids retained for process-local deduplication. */

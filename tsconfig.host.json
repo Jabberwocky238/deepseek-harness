@@ -266,6 +266,7 @@
     { "path": "./packages/credentials/deepseek-account" },
     { "path": "./packages/interaction/wecom" },
     { "path": "./packages/interaction/tool-wecom" },
+    { "path": "./packages/interaction/tool-talk" },
     { "path": "./packages/playground/playground" },
     { "path": "./packages/client/ui-deliverables/tsconfig.host.json" },
     { "path": "./vendor/cosmokit" },

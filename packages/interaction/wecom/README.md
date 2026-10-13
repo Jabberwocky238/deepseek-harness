@@ -28,6 +28,8 @@ Mount this plugin in a profile that provides Agents, credentials, a default mode
 
 By default every conversation of a bot works in the single directory named by `workspacePath`. Setting `sessionHomeRoot`, `sessionSshHost` and `sessionLoginPrefix` together switches the bot to an ordinary Linux layout instead: each conversation gets its own login, named by the prefix plus a four-digit sequence number (`qingang0001`), and its own home directory under `sessionHomeRoot`, which is its Agent's working directory. The plugin binds each conversation's Agent to its login through the ssh service, so the Agent's commands and file operations run as that login, and no conversation login can read another's home. The deployment login of `sessionSshHost` still provisions logins and seals inboxes through `sudo`, and traverses each home, which is mode 750 with that login's primary group; a group-writable home would make sshd refuse the login's key. The ssh service must use the same alias, and a child Agent a conversation's Agent creates runs as the deployment login.
 
+With `resumeConversations` on, a conversation-scoped bot also provides the `talk` service that [`dsh-tool-talk`](../tool-talk/README.md) calls: each conversation's address is its login, read from the persisted Session headers, whose working directory is the login's home. A message reaches the target's Agent before its next step, or resumes it and starts a turn whose reply goes to no chat. A conversation accepts `talkMaxRelays` messages in a row (default 8) and refuses more until its own people speak again, which bounds two conversations answering each other without end.
+
 The container provides the provisioner shipped in `assets/`, installed as root:
 
 ```sh

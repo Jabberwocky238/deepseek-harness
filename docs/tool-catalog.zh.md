@@ -23,6 +23,7 @@
 | `@deepseek-ai/dsh-mcp-resources` | `list_mcp_resource_templates`, `list_mcp_resources`, `read_mcp_resource` | `ctx.tools`, `ctx.mcpResources` | `tool/call`, `tool/result` | - | - |
 | `@deepseek-ai/dsh-experimental-browser-use-stagehand-native` | `stagehand_act`、`stagehand_extract`、`stagehand_navigate`、`stagehand_observe`、`stagehand_screenshot`、`stagehand_tabs` | `ctx.browserUse`、`ctx.agents`、`ctx.tools`、`ctx.systemPrompt` | `tool/call`、`tool/result` | - | - |
 | `@deepseek-ai/dsh-tool-ask-user` | `ask_user_question` | `ctx.tools`、`ctx.userQuestions` | `tool/call`、`tool/result after an answer or timeout`、`late user/message` | - | ask_user_question 默认保持原有阻塞行为；设置 `mode: timed` 后才启用前台超时与 pending 结果，同时问题仍可回答；timed 模式内 `timeout: -1` 让本次调用无限期阻塞。 |
+| `@deepseek-ai/dsh-tool-talk` | `talk`、`talk_peers` | `ctx.tools`、`ctx.talk` | `tool/call`、`tool/result`、`user/message in the target Session` | - | - |
 | `@deepseek-ai/dsh-tool-wecom` | `sendfile`、`syncbox` | `ctx.tools`、`ctx.wecom`、`ctx.fs` | `tool/call`、`tool/result`、`attachment delivered to a WeCom chat`、`file pulled into the working directory` | - | sendfile 只送附件，也从不指定会话：投递 seam 从 Session 解析目标，所以与任何机器人身份或配置无关。syncbox 仅在机器人启用 `fileStore` 时注册。该包随本 fork 的企微插件一起提供，不在任何默认 profile 里。 |
 | `@deepseek-ai/dsh-tools` | `run_code` | `ctx.workingDirectory (Agent executions)`、`ctx.tools`、`ctx.ptcRuntime (execution time)`、`ctx.systemPrompt` | `tool/call`、`one tool/ptc-dispatch-start + tool/ptc-dispatch pair per bridged sub-call`、`tool/result` | - | 在 `mode: ptc` 下，它由工具注册表所有，作为可过滤能力层之外的保留传输机制（参见 PTC mode Agent Note）。在 `ptc` 下，它是注册表对协议格式（wire format）的唯一贡献；其他可见能力在使用已加载运行时语言生成的 SDK 章节中声明。程序通过 binding 调用这些能力，调用按照原生并发约定调度：启动顺序和策略遵循提交顺序，并发安全的函数体最多重叠执行 `maxParallelSubCalls` 个。调用会重新进入完整且受守卫保护的工具流水线，并将每个嵌套执行关联到此外层结果。 |
 | `@deepseek-ai/dsh-plan-mode` | `exit_plan_mode` | `ctx.tools`、`ctx.systemPrompt`、`ctx.userQuestions (execution time, opportunistic)` | `tool/call`、`plan/mode inactive on an approved review`、`tool/result` | - | 规划未激活时，exit_plan_mode 仍保留在面向模型的 schema 中，这样状态转换不会在规划策略变更之外额外造成工具目录变动。其执行路径会拒绝规划模式之外的调用；在规划模式下，它通过用户交互 seam 提交计划（批准／根据反馈继续规划），批准后会在步骤边界记录规划模式已停用。 |
@@ -523,6 +524,49 @@
 来源：[`packages/interaction/tool-ask-user/src/index.ts`](../packages/interaction/tool-ask-user/src/index.ts)
 
 ask_user_question 默认保持原有阻塞行为；设置 `mode: timed` 后才启用前台超时与 pending 结果，同时问题仍可回答；timed 模式内 `timeout: -1` 让本次调用无限期阻塞。
+
+<a id="deepseek-aidsh-tool-talk"></a>
+
+## `@deepseek-ai/dsh-tool-talk`
+
+### `talk`
+
+Send a message to another Session of this deployment, addressed by the address talk_peers lists. The other Session reads it before its next step, or starts a turn for it, and can answer only with talk. Your ordinary reply text never reaches it.
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "to": {
+      "type": "string",
+      "description": "Address of the Session to message, from talk_peers."
+    },
+    "message": {
+      "type": "string",
+      "description": "The message."
+    }
+  },
+  "required": [
+    "to",
+    "message"
+  ]
+}
+```
+
+Source: [`packages/interaction/tool-talk/src/index.ts`](../packages/interaction/tool-talk/src/index.ts)
+
+### `talk_peers`
+
+List the Sessions of this deployment you can send messages to with talk, your own marked self.
+
+```json
+{
+  "type": "object",
+  "properties": {}
+}
+```
+
+Source: [`packages/interaction/tool-talk/src/index.ts`](../packages/interaction/tool-talk/src/index.ts)
 
 <a id="deepseek-aidsh-tool-wecom"></a>
 

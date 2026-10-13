@@ -28,6 +28,8 @@ kind: "package-reference"
 
 默认情况下，一个 bot 的所有会话都在 `workspacePath` 指定的同一个目录里工作。同时配置 `sessionHomeRoot`、`sessionSshHost` 与 `sessionLoginPrefix` 会把该 bot 切换到普通 Linux 格局：每个会话拿到自己的登录名（前缀加四位序号，如 `qingang0001`）和 `sessionHomeRoot` 下自己的家目录，家目录就是其 Agent 的工作目录。插件通过 ssh 服务把每个会话的 Agent 绑定到它的登录名，因此 Agent 的命令和文件操作都以该登录名执行，会话登录之间互相读不到家目录。`sessionSshHost` 的部署登录仍通过 `sudo` 建号和封存 inbox，并能穿过每个家目录：家目录是 750、属组为该登录的主组；若家目录组可写，sshd 会拒绝该登录的密钥。ssh 服务必须使用同一个别名；会话 Agent 创建的子 Agent 以部署登录执行。
 
+开启 `resumeConversations` 时，按会话建号的 bot 还会提供 [`dsh-tool-talk`](../tool-talk/README.zh.md) 所调用的 `talk` 服务：每个会话的地址就是它的登录名，从已持久化的会话头里读出（会话的工作目录就是该登录名的家目录）。消息在目标 Agent 的下一步之前送达；目标不在内存时会先恢复它并开一轮，这一轮的回复不发往任何聊天。一个会话连续最多接收 `talkMaxRelays` 条消息（默认 8），超过后拒收，直到它自己的人再次说话，以此防止两个会话无休止地互相回复。
+
 容器侧把 `assets/` 里随包发布的建号脚本装成 root 可执行：
 
 ```sh

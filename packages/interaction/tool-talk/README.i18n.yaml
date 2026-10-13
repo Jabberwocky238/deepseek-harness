@@ -1,0 +1,43 @@
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write packages/interaction/tool-talk/README.md
+/:
+  en: 3071519cb092d5fd
+  zh: 56cb17996f288e15
+/deepseek-ai-dsh-tool-talk:
+  en: bee69fe2fc1a483f
+  zh: 58f73ff76f5437a7
+/deepseek-ai-dsh-tool-talk/summary:
+  en: 948184b76ac0c378
+  zh: 58dbddd74ab79053
+/deepseek-ai-dsh-tool-talk/table-of-contents:
+  en: 76368b6b1da79c80
+  zh: 52384aee991ac542
+/deepseek-ai-dsh-tool-talk/use-this-package:
+  en: 0b69265076b18bf2
+  zh: 1823e62f601997c9
+/deepseek-ai-dsh-tool-talk/understand-the-implementation:
+  en: 24ca85593157e913
+  zh: 8cdbca9af96d3e30
+/deepseek-ai-dsh-tool-talk/model-experience:
+  en: 215e7ba838619b7b
+  zh: a311da3843709f90
+/deepseek-ai-dsh-tool-talk/model-experience/tool-schemas-and-delivered-messages:
+  en: 274a74ab436aee51
+  zh: 772fe9b43b1b415f
+/deepseek-ai-dsh-tool-talk/model-experience/tool-schemas-and-delivered-messages/what-the-model-sees:
+  en: 3bac7e04f87f19bd
+  zh: 073b524bbd86ebc7
+/deepseek-ai-dsh-tool-talk/model-experience/tool-schemas-and-delivered-messages/token-effect:
+  en: 5736d9598c172921
+  zh: c55bed4bc0c20c5e
+/deepseek-ai-dsh-tool-talk/model-experience/tool-schemas-and-delivered-messages/kv-cache-effect:
+  en: 43ce44d641d2d79a
+  zh: f291a821d17e069f
+/deepseek-ai-dsh-tool-talk/known-limitations-and-deferred-work:
+  en: a310d8d7c70e6ff3
+  zh: 0631015ada21ec66
+/deepseek-ai-dsh-tool-talk/known-limitations-and-deferred-work/dev-note:
+  en: e67f633dc6fe7773
+  zh: 3bb0c20c93f16f98

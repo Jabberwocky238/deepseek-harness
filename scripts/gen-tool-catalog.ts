@@ -44,6 +44,7 @@ import * as SkillFileSystem from '@deepseek-ai/dsh-skill-filesystem'
 import LocalJobRegistry from '@deepseek-ai/dsh-jobs-local'
 import * as ToolAskUser from '@deepseek-ai/dsh-tool-ask-user'
 import * as ToolWecom from '@deepseek-ai/dsh-tool-wecom'
+import * as ToolTalk from '@deepseek-ai/dsh-tool-talk'
 import * as ToolBash from '@deepseek-ai/dsh-tool-bash'
 import * as ToolPwsh from '@deepseek-ai/dsh-tool-pwsh'
 import * as ToolBashPersistent from '@deepseek-ai/dsh-tool-bash-persistent'
@@ -240,6 +241,22 @@ const TOOL_PACKAGES: ToolPackage[] = [
     },
     note:
       'ask_user_question keeps the original blocking behavior by default; set `mode: timed` to opt into a foreground timeout and pending result while the question remains answerable. In timed mode, `timeout: -1` keeps that call blocking indefinitely.',
+  },
+  {
+    pkg: '@deepseek-ai/dsh-tool-talk',
+    dir: 'tool-talk',
+    source: 'packages/interaction/tool-talk/src/index.ts',
+    requires: ['ctx.tools', 'ctx.talk'],
+    writes: ['tool/call', 'tool/result', 'user/message in the target Session'],
+    async mount(ctx) {
+      // Schema harvest never delivers: the tools' schemas are independent of
+      // what the seam returns, so the seam only has to exist.
+      ctx.provide('talk', {
+        peers: () => Promise.resolve([]),
+        send: (_caller, address) => Promise.resolve({ address, delivery: 'queued' }),
+      })
+      await ctx.plugin(ToolTalk, { maxMessageChars: 20_000 })
+    },
   },
   {
     pkg: '@deepseek-ai/dsh-tool-wecom',

@@ -1,7 +1,7 @@
 /** WeCom text and attachment ingress with streaming replies over owned Agent activity intervals. */
 
 import { createHash, randomUUID } from 'node:crypto'
-import { isAbsolute } from 'node:path'
+import { basename, dirname, isAbsolute } from 'node:path'
 import type { Context } from '@deepseek-ai/cordis'
 import type { Agent, AgentHandle } from '@deepseek-ai/dsh-agent'
 import { installModelSelection } from '@deepseek-ai/dsh-agent'
@@ -11,6 +11,7 @@ import type {} from '@deepseek-ai/dsh-permission-presets'
 import { credentialRef } from '@deepseek-ai/dsh-credentials'
 import type {} from '@deepseek-ai/dsh-attachment'
 import type { SshConnection } from '@deepseek-ai/dsh-ssh'
+import { createTalkMessage, type TalkDirectory } from '@deepseek-ai/dsh-tool-talk'
 import { createUserMessage, type ContentBlock } from '@deepseek-ai/dsh-llm'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import type { TurnEndReason } from '@deepseek-ai/dsh-session'
@@ -98,6 +99,12 @@ export interface Config {
   wsUrl: string
   /** Maximum retained conversations until plugin reload. */
   maxConversations: number
+  /**
+   * Messages a conversation accepts in a row through `talk` before its own
+   * people speak again. The plugin provides the `talk` service only in
+   * conversation-scoped mode with `resumeConversations`.
+   */
+  talkMaxRelays: number
   /** Maximum accepted messages across active and queued work. */
   maxPendingMessages: number
   /** Number of completed message ids retained for process-local deduplication. */
@@ -201,6 +208,7 @@ export const Config: z<Config> = z.object({
   resumeConversations: z.boolean().default(false),
   wsUrl: z.string().default('wss://openws.work.weixin.qq.com'),
   maxConversations: z.number().step(1).min(1).default(100),
+  talkMaxRelays: z.number().step(1).min(1).default(8),
   maxPendingMessages: z.number().step(1).min(1).default(32),
   maxRecentMessages: z.number().step(1).min(1).default(1000),
   maxInputBytes: z.number().step(1).min(1).default(16384),
@@ -255,6 +263,10 @@ interface ActiveTurn {
 
 interface Conversation {
   handle?: AgentHandle
+  /** The Agent being created or resumed, shared by a message and a `talk` delivery that both need it. */
+  starting?: Promise<AgentHandle> | undefined
+  /** `talk` messages accepted since the conversation's own people last spoke. */
+  relays: number
   tail: Promise<void>
   /**
    * The conversation's container login and home being found or created, in
@@ -403,6 +415,8 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
   const lifetime = new AbortController()
   const stopped = (): boolean => lifetime.signal.aborted
   const conversations = new Map<string, Conversation>()
+  /** Every conversation by its Session id, including those only `talk` has reached. */
+  const bySession = new Map<SessionId, Conversation>()
   const pending = new Set<string>()
   const recent = new Set<string>()
   const jobs = new Set<Promise<void>>()
@@ -607,6 +621,62 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
       if (conversation.active === turn) conversation.active = undefined
     }
   }
+  /**
+   * Create or resume the conversation's Agent once; a message and a `talk`
+   * delivery that both need it share the one start.
+   * @returns the conversation's live Agent handle.
+   */
+  const ensureAgent = (conversation: Conversation): Promise<AgentHandle> => {
+    if (conversation.handle !== undefined) return Promise.resolve(conversation.handle)
+    conversation.starting ??= ctx.agents.withoutInitiator(() => startAgent(conversation)).finally(() => {
+      conversation.starting = undefined
+    })
+    return conversation.starting
+  }
+  const startAgent = async (conversation: Conversation): Promise<AgentHandle> => {
+    const selection = ctx.agentDefaultModel.currentSelection()
+    // The login must exist before the Agent's tools reach the container, and
+    // its home is the Agent's working directory.
+    const identity = await provision(conversation)
+    const cwd = conversationCwd(config, identity)
+    const ssh = identity === undefined ? undefined : ctx.get('ssh')
+    if (identity !== undefined && ssh === undefined) throw new Error('wecom: conversation logins require a mounted ssh service')
+    const setup = async (agentCtx: Context, agent: Agent): Promise<void> => {
+      // Every operation the Agent drives runs as its conversation's login.
+      if (identity !== undefined) agentCtx.effect(() => (ssh as SshConnection).bindLogin(agent, identity.user), 'wecom.sessionLogin')
+      await mountPreset?.(agentCtx)
+      installModelSelection(agentCtx, { current: selection, assembled: undefined })
+    }
+    const agentOptions = { provider: selection.provider, model: selection.model }
+    // A resumable conversation falls back to creation while its log is still absent.
+    const sessionId = conversation.id
+    const handle = !conversation.resumable
+      ? await ctx.agents.create({
+        sessionId,
+        signal: lifetime.signal,
+        meta: { cwd, ...(config.agentPreset === undefined ? {} : { agentPreset: config.agentPreset }) },
+        agentOptions,
+        setup,
+      })
+      : await ctx.agents.resume({ resumeSessionId: sessionId, signal: lifetime.signal, agentOptions, setup })
+        .catch(() => ctx.agents.create({
+          sessionId,
+          signal: lifetime.signal,
+          meta: { cwd, ...(config.agentPreset === undefined ? {} : { agentPreset: config.agentPreset }) },
+          agentOptions,
+          setup,
+        }))
+    try {
+      lifetime.signal.throwIfAborted()
+      ctx.permissionPresets.set(handle.agent.session, config.permissionPreset)
+      conversation.handle = handle
+      workdirs.set(handle.agent.session.id, { cwd, ...identity === undefined ? {} : { user: identity.user } })
+    } catch (error: unknown) {
+      await handle.dispose()
+      throw error
+    }
+    return handle
+  }
   const answer = async (
     conversation: Conversation,
     message: InboundMessage,
@@ -631,59 +701,19 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
       if (!interrupted()) await stream.finish(copy.attachmentFailed)
       return
     }
-    if (conversation.handle === undefined) {
-      const selection = ctx.agentDefaultModel.currentSelection()
-      // The login must exist before the Agent's tools reach the container, and
-      // its home is the Agent's working directory.
-      const identity = await provision(conversation)
-      const cwd = conversationCwd(config, identity)
-      const ssh = identity === undefined ? undefined : ctx.get('ssh')
-      if (identity !== undefined && ssh === undefined) throw new Error('wecom: conversation logins require a mounted ssh service')
-      const setup = async (agentCtx: Context, agent: Agent): Promise<void> => {
-        // Every operation the Agent drives runs as its conversation's login.
-        if (identity !== undefined) agentCtx.effect(() => (ssh as SshConnection).bindLogin(agent, identity.user), 'wecom.sessionLogin')
-        await mountPreset?.(agentCtx)
-        installModelSelection(agentCtx, { current: selection, assembled: undefined })
-      }
-      const agentOptions = { provider: selection.provider, model: selection.model }
-      // A resumable conversation falls back to creation while its log is still absent.
-      const sessionId = conversation.id
-      const handle = !conversation.resumable
-        ? await ctx.agents.create({
-          sessionId,
-          signal: lifetime.signal,
-          meta: { cwd, ...(config.agentPreset === undefined ? {} : { agentPreset: config.agentPreset }) },
-          agentOptions,
-          setup,
-        })
-        : await ctx.agents.resume({ resumeSessionId: sessionId, signal: lifetime.signal, agentOptions, setup })
-          .catch(() => ctx.agents.create({
-            sessionId,
-            signal: lifetime.signal,
-            meta: { cwd, ...(config.agentPreset === undefined ? {} : { agentPreset: config.agentPreset }) },
-            agentOptions,
-            setup,
-          }))
-      try {
-        lifetime.signal.throwIfAborted()
-        ctx.permissionPresets.set(handle.agent.session, config.permissionPreset)
-        conversation.handle = handle
-        // The chat this Session answers in: a group's own id, or the user id of
-        // a direct chat. Outbound tools address this Session, never a raw chat.
-        sendTargets.set(handle.agent.session.id, {
-          client,
-          chatid: message.body.chattype === 'group'
-            ? message.body.chatid ?? message.body.from.userid
-            : message.body.from.userid,
-          delivered: false,
-        })
-        workdirs.set(handle.agent.session.id, { cwd, ...identity === undefined ? {} : { user: identity.user } })
-      } catch (error: unknown) {
-        await handle.dispose()
-        throw error
-      }
+    const handle = await ensureAgent(conversation)
+    if (!sendTargets.has(handle.agent.session.id)) {
+      // The chat this Session answers in: a group's own id, or the user id of
+      // a direct chat. Outbound tools address this Session, never a raw chat.
+      sendTargets.set(handle.agent.session.id, {
+        client,
+        chatid: message.body.chattype === 'group'
+          ? message.body.chatid ?? message.body.from.userid
+          : message.body.from.userid,
+        delivered: false,
+      })
     }
-    const { agent } = conversation.handle
+    const { agent } = handle
     // 本轮是否已用主动消息发过附件，决定收尾文字走流式还是主动消息。
     const target = sendTargets.get(agent.session.id)
     if (target !== undefined) target.delivered = false
@@ -783,13 +813,14 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
       return
     }
     if (conversation === undefined) {
-      conversation = {
-        tail: Promise.resolve(),
-        id: config.resumeConversations ? conversationSessionId(config.botId, key) : SessionId(`wecom-${randomUUID()}`),
-        resumable: config.resumeConversations === true,
-      }
+      const id = config.resumeConversations ? conversationSessionId(config.botId, key) : SessionId(`wecom-${randomUUID()}`)
+      // `talk` may already have reached this Session; its Agent is the conversation's.
+      conversation = bySession.get(id) ?? { tail: Promise.resolve(), id, resumable: config.resumeConversations === true, relays: 0 }
       conversations.set(key, conversation)
+      bySession.set(id, conversation)
     }
+    // Its own people spoke, so it accepts `talk` messages again.
+    conversation.relays = 0
     const answering = conversation.active
     if (answering !== undefined) {
       answering.interrupt()
@@ -822,6 +853,52 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
     track(job)
   }
 
+  // Conversations talk to each other by their logins: each login's home is its
+  // Session's working directory, so the persisted Session headers name them.
+  const talkHomeRoot = config.sessionHomeRoot
+  const talkPrefix = config.sessionLoginPrefix
+  if (config.resumeConversations === true && talkHomeRoot !== undefined && talkPrefix !== undefined) {
+    /** Address of every persisted conversation Session, to its Session id. */
+    const addresses = async (): Promise<Map<string, SessionId>> => {
+      const persistence = ctx.get('sessionPersistence')
+      if (persistence === undefined) throw new Error('wecom: talk requires a mounted session persistence backend')
+      const found = new Map<string, SessionId>()
+      for (const snapshot of await persistence.list()) {
+        const cwd = snapshot.header.cwd
+        if (cwd === undefined || dirname(cwd) !== talkHomeRoot || !basename(cwd).startsWith(talkPrefix)) continue
+        found.set(basename(cwd), snapshot.header.id)
+      }
+      return found
+    }
+    const talk: TalkDirectory = {
+      peers: async caller => [...await addresses()].map(([address, id]) => ({ address, self: id === caller })),
+      send: async (caller, address, text) => {
+        const found = await addresses()
+        const target = found.get(address)
+        if (target === undefined) throw new Error(`talk: no Session has the address ${JSON.stringify(address)}`)
+        if (target === caller) throw new Error('talk: a Session cannot message itself')
+        const sender = [...found].find(([, id]) => id === caller)?.[0]
+        if (sender === undefined) throw new Error('talk: the calling Session has no address')
+        let conversation = bySession.get(target)
+        if (conversation === undefined) {
+          conversation = { tail: Promise.resolve(), id: target, resumable: true, relays: 0 }
+          bySession.set(target, conversation)
+        }
+        if (conversation.relays >= config.talkMaxRelays) {
+          throw new Error(`talk: ${address} accepted ${String(conversation.relays)} messages since its own people last spoke and takes no more until they do`)
+        }
+        const { agent } = await ensureAgent(conversation)
+        const idle = agent.status === 'idle'
+        conversation.relays++
+        // The delivery is the target's own input: its next step, or a turn of
+        // its own when idle, whose reply goes to no chat.
+        agent.steer(createTalkMessage(caller, sender, text))
+        return { address, delivery: idle ? 'woken' : 'queued' }
+      },
+    }
+    ctx.provide('talk', talk)
+  }
+
   ctx.effect(() => {
     client.on('message', receive)
     client.on('error', () => { ctx.logger.warn('wecom connection failed; check bot credentials and network') })
@@ -834,13 +911,15 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
         ? new Promise<void>((resolve) => { client.once('disconnected', () => { resolve() }) })
         : Promise.resolve()
       client.disconnect()
-      const disposed = await Promise.allSettled([...conversations.values()].map(async (conversation) => {
+      const everyConversation = new Set([...conversations.values(), ...bySession.values()])
+      const disposed = await Promise.allSettled([...everyConversation].map(async (conversation) => {
         await conversation.handle?.dispose()
       }))
       await Promise.all(jobs)
       await closed
       client.removeAllListeners()
       conversations.clear()
+      bySession.clear()
       pending.clear()
       recent.clear()
       sendTargets.clear()

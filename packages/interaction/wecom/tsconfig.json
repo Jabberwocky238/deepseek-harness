@@ -87,6 +87,9 @@
       "path": "../../ssh/ssh"
     },
     {
+      "path": "../tool-talk"
+    },
+    {
       "path": "../../ssh/fs-ssh"
     },
     {

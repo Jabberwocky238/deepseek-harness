@@ -46,7 +46,8 @@
     "@wecom/aibot-node-sdk": "1.0.7",
     "content-disposition": "^3.0.0",
     "sharp": "^0.35.3",
-    "zod": "^4.4.3"
+    "zod": "^4.4.3",
+    "@deepseek-ai/dsh-tool-talk": "workspace:^"
   },
   "devDependencies": {
     "@deepseek-ai/cordis": "workspace:^",

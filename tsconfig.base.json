@@ -349,6 +349,7 @@
       "@deepseek-ai/dsh-playground": ["./packages/playground/playground/src"],
       "@deepseek-ai/dsh-wecom": ["./packages/interaction/wecom/src"],
       "@deepseek-ai/dsh-tool-wecom": ["./packages/interaction/tool-wecom/src"],
+      "@deepseek-ai/dsh-tool-talk": ["./packages/interaction/tool-talk/src"],
       // BEGIN generated package aliases — pnpm run gen-tsconfig-paths
       "@deepseek-ai/dsh-acp": ["./packages/acp/acp/src"],
       "@deepseek-ai/dsh-acp-app": ["./packages/bundle/acp-app/src"],

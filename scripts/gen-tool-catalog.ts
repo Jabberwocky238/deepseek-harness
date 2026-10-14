@@ -43,8 +43,8 @@ import SkillRegistry from '@deepseek-ai/dsh-skill'
 import * as SkillFileSystem from '@deepseek-ai/dsh-skill-filesystem'
 import LocalJobRegistry from '@deepseek-ai/dsh-jobs-local'
 import * as ToolAskUser from '@deepseek-ai/dsh-tool-ask-user'
-import * as ToolWecom from '@deepseek-ai/dsh-tool-wecom'
-import * as ToolTalk from '@deepseek-ai/dsh-tool-talk'
+import * as ToolWecom from '@jabberwocky238/dsh-tool-wecom'
+import * as ToolTalk from '@jabberwocky238/dsh-tool-talk'
 import * as ToolBash from '@deepseek-ai/dsh-tool-bash'
 import * as ToolPwsh from '@deepseek-ai/dsh-tool-pwsh'
 import * as ToolBashPersistent from '@deepseek-ai/dsh-tool-bash-persistent'
@@ -243,7 +243,7 @@ const TOOL_PACKAGES: ToolPackage[] = [
       'ask_user_question keeps the original blocking behavior by default; set `mode: timed` to opt into a foreground timeout and pending result while the question remains answerable. In timed mode, `timeout: -1` keeps that call blocking indefinitely.',
   },
   {
-    pkg: '@deepseek-ai/dsh-tool-talk',
+    pkg: '@jabberwocky238/dsh-tool-talk',
     dir: 'tool-talk',
     source: 'packages/interaction/tool-talk/src/index.ts',
     requires: ['ctx.tools', 'ctx.talk'],
@@ -259,7 +259,7 @@ const TOOL_PACKAGES: ToolPackage[] = [
     },
   },
   {
-    pkg: '@deepseek-ai/dsh-tool-wecom',
+    pkg: '@jabberwocky238/dsh-tool-wecom',
     dir: 'tool-wecom',
     source: 'packages/interaction/tool-wecom/src/index.ts',
     requires: ['ctx.tools', 'ctx.wecom', 'ctx.fs'],

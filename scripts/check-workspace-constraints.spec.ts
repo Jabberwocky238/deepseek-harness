@@ -255,6 +255,28 @@ describe('experimental workspace constraints', () => {
   })
 })
 
+describe('fork package repositories', () => {
+  const dir = 'packages/interaction/wecom'
+  const manifest = {
+    name: '@jabberwocky238/dsh-wecom', version: '0.2.7', publishConfig: { access: 'public' },
+    repository: { type: 'git', url: 'git+https://github.com/Jabberwocky238/dsh-wecom.git' },
+  }
+  const repositoryErrors = (errors: string[]) => errors.filter(error => error.includes('repository'))
+
+  it('accepts a fork package naming its own repository', () => {
+    expect(repositoryErrors(checkWorkspaceManifest({ dir, manifest }))).toEqual([])
+  })
+
+  it.each([
+    { url: 'git+https://github.com/deepseek-ai/deepseek-harness.git', directory: dir },
+    { url: 'git+https://github.com/Jabberwocky238/dsh-wecom.git', directory: dir },
+    { url: 'git+https://github.com/Jabberwocky238/dsh-ssh.git' },
+  ])('rejects any other repository: $url $directory', (repository) => {
+    expect(repositoryErrors(checkWorkspaceManifest({ dir, manifest: { ...manifest, repository: { type: 'git', ...repository } } })))
+      .toEqual([expect.stringContaining('fork package repository must use git+https://github.com/Jabberwocky238/dsh-wecom.git')])
+  })
+})
+
 describe('dsh family version coherence', () => {
   it('rejects a package carrying a stale shared version', () => {
     expect(checkDshFamilyVersion(

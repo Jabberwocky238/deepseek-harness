@@ -9,8 +9,8 @@
   en: 6cc2cd9ced70bb09
   zh: 1c0e6cb4ba2ed637
 /tool-schema-catalog/tool-package-map:
-  en: 076040646cc684e8
-  zh: c961a46fcf486cda
+  en: 853f90c76bb57279
+  zh: 34589d9af54623ff
 /tool-schema-catalog/deepseek-ai-dsh-plugin-manager:
   en: e0143916bb634762
   zh: e0143916bb634762
@@ -56,22 +56,22 @@
 /tool-schema-catalog/deepseek-ai-dsh-tool-ask-user/ask-user-question:
   en: 04f75a62056883c4
   zh: 8e0b0015466cc62d
-/tool-schema-catalog/deepseek-ai-dsh-tool-talk:
-  en: 9fbab4381f4a7a76
-  zh: 9fbab4381f4a7a76
-/tool-schema-catalog/deepseek-ai-dsh-tool-talk/talk:
+/tool-schema-catalog/jabberwocky238-dsh-tool-talk:
+  en: 5b77a3e8cd55c7c8
+  zh: 5b77a3e8cd55c7c8
+/tool-schema-catalog/jabberwocky238-dsh-tool-talk/talk:
   en: 6aa5668a63d8afcc
   zh: 6aa5668a63d8afcc
-/tool-schema-catalog/deepseek-ai-dsh-tool-talk/talk-peers:
+/tool-schema-catalog/jabberwocky238-dsh-tool-talk/talk-peers:
   en: 1b83e85adae7d278
   zh: 1b83e85adae7d278
-/tool-schema-catalog/deepseek-ai-dsh-tool-wecom:
-  en: e7308f429b4a4b95
-  zh: e7308f429b4a4b95
-/tool-schema-catalog/deepseek-ai-dsh-tool-wecom/sendfile:
+/tool-schema-catalog/jabberwocky238-dsh-tool-wecom:
+  en: 1798fd1f93b5e71a
+  zh: 1798fd1f93b5e71a
+/tool-schema-catalog/jabberwocky238-dsh-tool-wecom/sendfile:
   en: b325c4adddce77f2
   zh: 0b10522f2b7fde75
-/tool-schema-catalog/deepseek-ai-dsh-tool-wecom/syncbox:
+/tool-schema-catalog/jabberwocky238-dsh-tool-wecom/syncbox:
   en: 024d2476a68dfed6
   zh: 4a1264c8c112f23e
 /tool-schema-catalog/deepseek-ai-dsh-tools:

@@ -1,6 +1,6 @@
 - insert:
     - id: wecom-two
-      name: '@deepseek-ai/dsh-wecom'
+      name: '@jabberwocky238/dsh-wecom'
       config:
         botId: !!js process.env.WECOM_BOT_2_ID
         secretEnv: WECOM_BOT_2_SECRET

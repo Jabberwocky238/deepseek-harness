@@ -73,7 +73,7 @@ export async function verifySshTransport(argv: string[]): Promise<void> {
     await chmod(join(bin, 'ssh'), 0o755)
     const workspace = '/home/dsh/workspace'
     const config = join(temporary, 'cordis.yml')
-    await writeFile(config, artifactComposition({ id: 'ssh', name: '@deepseek-ai/dsh-ssh', config: {
+    await writeFile(config, artifactComposition({ id: 'ssh', name: '@jabberwocky238/dsh-ssh', config: {
       host: 'artifact', launch: { kind: 'executable' }, helper: '/opt/dsh-helper/dsh-ssh-helper',
       helperHash: await fileDigest(join(installed, 'dsh-ssh-helper')), workspace,
     } }, workspace))

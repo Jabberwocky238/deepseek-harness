@@ -35,7 +35,7 @@
 
 - insert:
     - id: wecom
-      name: '@deepseek-ai/dsh-wecom'
+      name: '@jabberwocky238/dsh-wecom'
       config:
         botId: snapshot-bot
         secretEnv: WECOM_BOT_SECRET

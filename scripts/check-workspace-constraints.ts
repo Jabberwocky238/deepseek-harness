@@ -55,6 +55,21 @@ const publicationSourceAllowlist: Readonly<Record<string, readonly string[]>> = 
 }
 /** Public source home recorded in maintained package manifests. */
 const publishedRepositoryUrl = 'git+https://github.com/deepseek-ai/deepseek-harness.git'
+/**
+ * Scope of the fork's own packages. Each lives in its own repository, mounted
+ * here as a submodule at its package path, and is published from it under its
+ * own version line.
+ */
+const forkScope = '@jabberwocky238/'
+
+/**
+ * The repository a fork package names: its own, under the fork's account.
+ * @param name - the package name, inside {@link forkScope}.
+ * @returns the git URL of the package's repository.
+ */
+export function forkRepositoryUrl(name: string): string {
+  return `git+https://github.com/Jabberwocky238/${name.slice(forkScope.length)}.git`
+}
 /** Packages that participate in the experimental policy. */
 const experimentalPackageDirectory = /^packages\/experimental\/[^/]+$/
 /** Ordinary directories whose packages this repository publishes: one release member each. */
@@ -210,7 +225,7 @@ const packageFileExtras: Readonly<Record<string, readonly string[]>> = {
   '@deepseek-ai/dsh-subprocess': ['lib/control.js'],
   // SSH launches a private helper and shares wire definitions and TLS setup
   // between that helper and the connection owner.
-  '@deepseek-ai/dsh-ssh': [
+  '@jabberwocky238/dsh-ssh': [
     'lib/helper.js', 'lib/protocol.js', 'lib/schemas.js',
     'lib/protocol-*.js', 'lib/schemas-*.js', 'lib/stream-security-*.js',
   ],
@@ -449,7 +464,12 @@ export function checkWorkspaceManifest({ dir, manifest }: WorkspaceManifest): st
     if (manifest.publishConfig?.access !== 'public') {
       errors.push(`${label}: release member must set publishConfig.access to "public"`)
     }
-    if (manifest.repository?.type !== 'git'
+    if (manifest.name?.startsWith(forkScope) === true) {
+      const own = forkRepositoryUrl(manifest.name)
+      if (manifest.repository?.type !== 'git' || manifest.repository.url !== own || manifest.repository.directory !== undefined) {
+        errors.push(`${label}: fork package repository must use ${own} without a directory`)
+      }
+    } else if (manifest.repository?.type !== 'git'
       || manifest.repository.url !== publishedRepositoryUrl
       || manifest.repository.directory !== dir) {
       errors.push(`${label}: release member repository must use ${publishedRepositoryUrl} with directory ${dir}`)

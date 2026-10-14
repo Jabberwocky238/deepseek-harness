@@ -2775,10 +2775,10 @@ export type SessionLogCompressionLevel = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-session-log-export -->
 
-<!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-session-manager -->
+<!-- BEGIN GENERATED config-catalog:@jabberwocky238/dsh-session-manager -->
 <a id="deepseek-aidsh-session-manager"></a>
 
-## `@deepseek-ai/dsh-session-manager`
+## `@jabberwocky238/dsh-session-manager`
 
 - `inject`: `sessions` · `credentials`
 - `source`: [`packages/session/session-manager/src/index.ts:27`](../packages/session/session-manager/src/index.ts)
@@ -2814,7 +2814,7 @@ export interface Config {
 /** Supported SQLite journal modes. */
 export type JournalMode = 'wal' | 'delete' | 'truncate' | 'persist'
 ```
-<!-- END GENERATED config-catalog:@deepseek-ai/dsh-session-manager -->
+<!-- END GENERATED config-catalog:@jabberwocky238/dsh-session-manager -->
 
 <!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-session-persistence-jsonl -->
 <a id="deepseek-aidsh-session-persistence-jsonl"></a>
@@ -3187,10 +3187,10 @@ export interface Config {
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-spill-policy -->
 
-<!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-ssh -->
+<!-- BEGIN GENERATED config-catalog:@jabberwocky238/dsh-ssh -->
 <a id="deepseek-aidsh-ssh"></a>
 
-## `@deepseek-ai/dsh-ssh`
+## `@jabberwocky238/dsh-ssh`
 
 - `source`: [`packages/ssh/ssh/src/index.ts:34`](../packages/ssh/ssh/src/index.ts)
 
@@ -3234,7 +3234,7 @@ export type HelperLaunch = {
   kind: 'executable'
 }
 ```
-<!-- END GENERATED config-catalog:@deepseek-ai/dsh-ssh -->
+<!-- END GENERATED config-catalog:@jabberwocky238/dsh-ssh -->
 
 <!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-storage-domain -->
 <a id="deepseek-aidsh-storage-domain"></a>
@@ -4098,10 +4098,10 @@ export interface Config {
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-tool-subagent -->
 
-<!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-tool-talk -->
+<!-- BEGIN GENERATED config-catalog:@jabberwocky238/dsh-tool-talk -->
 <a id="deepseek-aidsh-tool-talk"></a>
 
-## `@deepseek-ai/dsh-tool-talk`
+## `@jabberwocky238/dsh-tool-talk`
 
 - `inject`: `tools` · `talk`
 - `source`: [`packages/interaction/tool-talk/src/index.ts:90`](../packages/interaction/tool-talk/src/index.ts)
@@ -4113,7 +4113,7 @@ export interface Config {
   maxMessageChars: number
 }
 ```
-<!-- END GENERATED config-catalog:@deepseek-ai/dsh-tool-talk -->
+<!-- END GENERATED config-catalog:@jabberwocky238/dsh-tool-talk -->
 
 <!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-tool-terminal -->
 <a id="deepseek-aidsh-tool-terminal"></a>
@@ -4508,10 +4508,10 @@ export interface Config {
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-webhook-github -->
 
-<!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-wecom -->
+<!-- BEGIN GENERATED config-catalog:@jabberwocky238/dsh-wecom -->
 <a id="deepseek-aidsh-wecom"></a>
 
-## `@deepseek-ai/dsh-wecom`
+## `@jabberwocky238/dsh-wecom`
 
 - `inject`: `agents` · `sessions` · `credentials` · `agentDefaultModel` · `permissionPresets` · `attachments` · `sessionProjections` · `tools`
 - `source`: [`packages/interaction/wecom/src/index.ts:55`](../packages/interaction/wecom/src/index.ts)
@@ -4660,7 +4660,7 @@ export interface Config {
   }
 }
 ```
-<!-- END GENERATED config-catalog:@deepseek-ai/dsh-wecom -->
+<!-- END GENERATED config-catalog:@jabberwocky238/dsh-wecom -->
 
 <!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-workflow-ptc -->
 <a id="deepseek-aidsh-workflow-ptc"></a>
@@ -4837,7 +4837,7 @@ export interface Config {
 | `@deepseek-ai/dsh-tool-cordis` | `tools` · `cordisInspect` | [`packages/extensions/tool-cordis/src/index.ts`](../packages/extensions/tool-cordis/src/index.ts) |
 | `@deepseek-ai/dsh-tool-schedule` | `tools` | [`packages/schedule/tool-schedule/src/index.ts`](../packages/schedule/tool-schedule/src/index.ts) |
 | `@deepseek-ai/dsh-tool-subagent-control` | `tools` · `subagents` | [`packages/subagent/tool-subagent-control/src/index.ts`](../packages/subagent/tool-subagent-control/src/index.ts) |
-| `@deepseek-ai/dsh-tool-wecom` | `tools` · `wecom` · `fs` | [`packages/interaction/tool-wecom/src/index.ts`](../packages/interaction/tool-wecom/src/index.ts) |
+| `@jabberwocky238/dsh-tool-wecom` | `tools` · `wecom` · `fs` | [`packages/interaction/tool-wecom/src/index.ts`](../packages/interaction/tool-wecom/src/index.ts) |
 | `@deepseek-ai/dsh-tool-working-directory` | `tools` · `workingDirectory` | [`packages/session/tool-working-directory/src/index.ts`](../packages/session/tool-working-directory/src/index.ts) |
 | `@deepseek-ai/dsh-user-questions` | — | [`packages/interaction/user-questions/src/index.ts`](../packages/interaction/user-questions/src/index.ts) |
 | `@deepseek-ai/dsh-webhook` | `agents` · `agentDefaultModel` · `agentPresets` · `permissionPresets` · `sessionTitle` · `workspaceRegistry` | [`packages/experimental/webhook/src/index.ts`](../packages/experimental/webhook/src/index.ts) |

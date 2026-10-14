@@ -273,11 +273,11 @@ Every package below exports a Cordis plugin that a bundle patch can name in a Lo
 | `@deepseek-ai/dsh-commands` | no | Plugin-owned human command registry for DeepSeek Harness UIs |
 | `@deepseek-ai/dsh-permission-presets` | yes | User-facing permission presets (ctx.permissionPresets) for the DeepSeek Harness: one product-level Permissions select bundling the sandbox-mode and approval-policy knobs, written through to their own session events |
 | `@deepseek-ai/dsh-tool-ask-user` | yes | Model-facing ask_user_question tool over the ctx.userQuestions seam |
-| `@deepseek-ai/dsh-tool-talk` | yes | Model-facing talk and talk_peers tools: messages between the Sessions of one deployment |
-| `@deepseek-ai/dsh-tool-wecom` | no | Model-facing sendfile tool that publishes attachments, without text, to a WeCom conversation |
+| `@jabberwocky238/dsh-tool-talk` | yes | Model-facing talk and talk_peers tools: messages between the Sessions of one deployment |
+| `@jabberwocky238/dsh-tool-wecom` | no | Model-facing sendfile tool that publishes attachments, without text, to a WeCom conversation |
 | `@deepseek-ai/dsh-user-approval` | yes | User-approval seam (ctx.approval) for the DeepSeek Harness: one-shot permission decisions dispatched to composed answerers over the approval/request waterfall, fail-closed by default |
 | `@deepseek-ai/dsh-user-questions` | no | Abstract user-questions seam (ctx.userQuestions) for asking the human during agent runs |
-| `@deepseek-ai/dsh-wecom` | yes | Enterprise WeChat conversations backed by scoped DSH Agents |
+| `@jabberwocky238/dsh-wecom` | yes | Enterprise WeChat conversations backed by scoped DSH Agents |
 
 ## jobs
 
@@ -366,7 +366,7 @@ Every package below exports a Cordis plugin that a bundle patch can name in a Lo
 |---|---|---|
 | `@deepseek-ai/dsh-session-checkpoint-policy` | no | Semantic session durability checkpoints before model requests and tool side effects |
 | `@deepseek-ai/dsh-session-log-deepseek` | yes | Incremental lossless session-log request extension for the official DeepSeek LLM API |
-| `@deepseek-ai/dsh-session-manager` | yes | Session interaction recording: the session-manager capability and its SQLite/PostgreSQL storage backend |
+| `@jabberwocky238/dsh-session-manager` | yes | Session interaction recording: the session-manager capability and its SQLite/PostgreSQL storage backend |
 | `@deepseek-ai/dsh-session-persistence-jsonl` | yes | JSONL durable session persistence backend for the DeepSeek Harness |
 | `@deepseek-ai/dsh-session-projection` | no | Session-projection seam: the merge-extensible projection type table, the provider contract, and the ctx.sessionProjections registry serving whole current values of log-derived per-session state |
 | `@deepseek-ai/dsh-session-projection-cache` | yes | Persisted projection cache (ctx.sessionProjectionCache): durable per-session checkpoint records on the session_projcache storage domain (per-record layout), throttled write-behind, and the cached listing read |
@@ -428,7 +428,7 @@ Every package below exports a Cordis plugin that a bundle patch can name in a Lo
 |---|---|---|
 | `@deepseek-ai/dsh-fs-ssh` | no | Filesystem provider over the shared POSIX SSH helper |
 | `@deepseek-ai/dsh-sandbox-ssh` | no | Remote POSIX sandbox argv provider over the shared SSH helper |
-| `@deepseek-ai/dsh-ssh` | yes | Shared OpenSSH connection and versioned POSIX remote helper |
+| `@jabberwocky238/dsh-ssh` | yes | Shared OpenSSH connection and versioned POSIX remote helper |
 | `@deepseek-ai/dsh-subprocess-ssh` | no | Subprocess and terminal provider over the shared POSIX SSH helper |
 
 ## storage

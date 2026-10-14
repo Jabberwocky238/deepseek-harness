@@ -34,6 +34,6 @@ export async function runSshHelperRuntime(): Promise<void> {
     const { runSelectedSubprocessRunner } = await import('@deepseek-ai/dsh-subprocess-local/runner')
     await runSelectedSubprocessRunner(selection)
   } else {
-    await import('@deepseek-ai/dsh-ssh/helper')
+    await import('@jabberwocky238/dsh-ssh/helper')
   }
 }

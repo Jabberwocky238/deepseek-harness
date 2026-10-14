@@ -478,15 +478,15 @@ importers:
       '@deepseek-ai/dsh-web-app':
         specifier: workspace:*
         version: link:../../packages/bundle/web-app
-      '@deepseek-ai/dsh-wecom':
-        specifier: workspace:*
-        version: link:../../packages/interaction/wecom
       '@deepseek-ai/dsh-workflow-ptc':
         specifier: workspace:*
         version: link:../../packages/workflow/workflow-ptc
       '@deepseek-ai/schemastery':
         specifier: link:../../vendor/schemastery
         version: link:../../vendor/schemastery
+      '@jabberwocky238/dsh-wecom':
+        specifier: workspace:*
+        version: link:../../packages/interaction/wecom
       commander:
         specifier: ^15.0.0
         version: 15.0.0
@@ -10480,7 +10480,7 @@ importers:
       '@deepseek-ai/dsh-tools':
         specifier: workspace:*
         version: link:../../core/tools
-      '@deepseek-ai/dsh-wecom':
+      '@jabberwocky238/dsh-wecom':
         specifier: workspace:*
         version: link:../wecom
 
@@ -10572,21 +10572,21 @@ importers:
       '@deepseek-ai/dsh-sandbox-ssh':
         specifier: workspace:^
         version: link:../../ssh/sandbox-ssh
-      '@deepseek-ai/dsh-ssh':
-        specifier: workspace:^
-        version: link:../../ssh/ssh
       '@deepseek-ai/dsh-subprocess-ssh':
         specifier: workspace:^
         version: link:../../ssh/subprocess-ssh
-      '@deepseek-ai/dsh-tool-talk':
-        specifier: workspace:^
-        version: link:../tool-talk
       '@deepseek-ai/dsh-util-values':
         specifier: workspace:^
         version: link:../../util/values
       '@deepseek-ai/schemastery':
         specifier: link:../../../vendor/schemastery
         version: link:../../../vendor/schemastery
+      '@jabberwocky238/dsh-ssh':
+        specifier: workspace:^
+        version: link:../../ssh/ssh
+      '@jabberwocky238/dsh-tool-talk':
+        specifier: workspace:^
+        version: link:../tool-talk
       '@wecom/aibot-node-sdk':
         specifier: 1.0.7
         version: 1.0.7(debug@4.4.3(supports-color@9.4.0))(supports-color@9.4.0)
@@ -13418,7 +13418,7 @@ importers:
       '@deepseek-ai/dsh-sandbox-policy':
         specifier: workspace:*
         version: link:../../sandbox/sandbox-policy
-      '@deepseek-ai/dsh-ssh':
+      '@jabberwocky238/dsh-ssh':
         specifier: workspace:*
         version: link:../ssh
 
@@ -13437,7 +13437,7 @@ importers:
       '@deepseek-ai/dsh-sandbox':
         specifier: workspace:*
         version: link:../../sandbox/sandbox
-      '@deepseek-ai/dsh-ssh':
+      '@jabberwocky238/dsh-ssh':
         specifier: workspace:*
         version: link:../ssh
 
@@ -13570,9 +13570,6 @@ importers:
       '@deepseek-ai/dsh-skill':
         specifier: workspace:*
         version: link:../../skill/skill
-      '@deepseek-ai/dsh-ssh':
-        specifier: workspace:*
-        version: link:../ssh
       '@deepseek-ai/dsh-subprocess':
         specifier: workspace:*
         version: link:../../subprocess/subprocess
@@ -13603,6 +13600,9 @@ importers:
       '@deepseek-ai/schemastery':
         specifier: link:../../../vendor/schemastery
         version: link:../../../vendor/schemastery
+      '@jabberwocky238/dsh-ssh':
+        specifier: workspace:*
+        version: link:../ssh
     devDependencies:
       '@deepseek-ai/dsh-app-boot':
         specifier: workspace:*
@@ -13629,15 +13629,15 @@ importers:
       '@deepseek-ai/cordis':
         specifier: workspace:~
         version: link:../../../vendor/cordis
-      '@deepseek-ai/dsh-ssh':
-        specifier: workspace:*
-        version: link:../ssh
       '@deepseek-ai/dsh-subprocess':
         specifier: workspace:*
         version: link:../../subprocess/subprocess
       '@deepseek-ai/dsh-subprocess-local':
         specifier: workspace:*
         version: link:../../subprocess/subprocess-local
+      '@jabberwocky238/dsh-ssh':
+        specifier: workspace:*
+        version: link:../ssh
 
   packages/storage/storage:
     devDependencies:

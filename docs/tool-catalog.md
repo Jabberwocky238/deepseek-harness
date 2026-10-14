@@ -19,8 +19,8 @@ This table connects model-visible tool names to the plugin package and service s
 | `@deepseek-ai/dsh-mcp-resources` | `list_mcp_resource_templates`, `list_mcp_resources`, `read_mcp_resource` | `ctx.tools`, `ctx.mcpResources` | `tool/call`, `tool/result` | - | - |
 | `@deepseek-ai/dsh-experimental-browser-use-stagehand-native` | `stagehand_act`, `stagehand_extract`, `stagehand_navigate`, `stagehand_observe`, `stagehand_screenshot`, `stagehand_tabs` | `ctx.browserUse`, `ctx.agents`, `ctx.tools`, `ctx.systemPrompt` | `tool/call`, `tool/result` | - | - |
 | `@deepseek-ai/dsh-tool-ask-user` | `ask_user_question` | `ctx.tools`, `ctx.userQuestions` | `tool/call`, `tool/result after an answer or timeout`, `late user/message` | - | ask_user_question keeps the original blocking behavior by default; set `mode: timed` to opt into a foreground timeout and pending result while the question remains answerable. In timed mode, `timeout: -1` keeps that call blocking indefinitely. |
-| `@deepseek-ai/dsh-tool-talk` | `talk`, `talk_peers` | `ctx.tools`, `ctx.talk` | `tool/call`, `tool/result`, `user/message in the target Session` | - | - |
-| `@deepseek-ai/dsh-tool-wecom` | `sendfile`, `syncbox` | `ctx.tools`, `ctx.wecom`, `ctx.fs` | `tool/call`, `tool/result`, `attachment delivered to a WeCom chat`, `file pulled into the working directory` | - | sendfile carries attachments only and never names a chat: the delivery seam resolves the target from the Session, so the schema is independent of any bot identity or configuration. syncbox registers only when the bot enables `fileStore`. The package ships with the fork's WeCom plugin, not with a default profile. |
+| `@jabberwocky238/dsh-tool-talk` | `talk`, `talk_peers` | `ctx.tools`, `ctx.talk` | `tool/call`, `tool/result`, `user/message in the target Session` | - | - |
+| `@jabberwocky238/dsh-tool-wecom` | `sendfile`, `syncbox` | `ctx.tools`, `ctx.wecom`, `ctx.fs` | `tool/call`, `tool/result`, `attachment delivered to a WeCom chat`, `file pulled into the working directory` | - | sendfile carries attachments only and never names a chat: the delivery seam resolves the target from the Session, so the schema is independent of any bot identity or configuration. syncbox registers only when the bot enables `fileStore`. The package ships with the fork's WeCom plugin, not with a default profile. |
 | `@deepseek-ai/dsh-tools` | `run_code` | `ctx.workingDirectory (Agent executions)`, `ctx.tools`, `ctx.ptcRuntime (execution time)`, `ctx.systemPrompt` | `tool/call`, `one tool/ptc-dispatch-start + tool/ptc-dispatch pair per bridged sub-call`, `tool/result` | - | Owned by the tool registry as a reserved transport outside filterable capability layers under `mode: ptc` (see the PTC mode Agent Note). Under `ptc` it is the registry's only wire contribution; the other visible capabilities are declared in a generated SDK section in the loaded runtime's language, and a program calls them through bindings scheduled under the native concurrency contract (submission-ordered starts and policy; concurrency-safe bodies overlap up to `maxParallelSubCalls`) that re-enter the complete guarded tool pipeline and link each nested execution to this outer result. |
 | `@deepseek-ai/dsh-plan-mode` | `exit_plan_mode` | `ctx.tools`, `ctx.systemPrompt`, `ctx.userQuestions (execution time, opportunistic)` | `tool/call`, `plan/mode inactive on an approved review`, `tool/result` | - | exit_plan_mode stays in the model-facing schema while planning is inactive so transitions add no tool-catalog churn on top of the plan-policy change. Its execute path rejects calls outside plan mode; in plan mode it presents the plan over the user-questions seam (approve / keep planning with feedback), and approval logs plan mode inactive at the step boundary. |
 | `@deepseek-ai/dsh-tool-bash` | `bash` | `ctx.workingDirectory`, `ctx.tools`, `ctx.shell`, `ctx.systemPrompt`, `ctx.shellEnv`, `ctx.jobs for run_in_background and the job-backed foreground path` | `tool/call`, `tool/result` | - | The bash tool is the model-facing consumer of the bash executor seam. With a job registry composed every call registers with the generic `ctx.jobs` runtime as it starts, collected/stopped through the `job_*` tools from `@deepseek-ai/dsh-tool-jobs`; without one, or with `enableRunInBackground: false`, the tool registers a foreground-only schema without the `run_in_background` parameter. |
@@ -523,7 +523,7 @@ ask_user_question keeps the original blocking behavior by default; set `mode: ti
 
 <a id="deepseek-aidsh-tool-talk"></a>
 
-## `@deepseek-ai/dsh-tool-talk`
+## `@jabberwocky238/dsh-tool-talk`
 
 ### `talk`
 
@@ -566,7 +566,7 @@ Source: [`packages/interaction/tool-talk/src/index.ts`](../packages/interaction/
 
 <a id="deepseek-aidsh-tool-wecom"></a>
 
-## `@deepseek-ai/dsh-tool-wecom`
+## `@jabberwocky238/dsh-tool-wecom`
 
 ### `sendfile`
 

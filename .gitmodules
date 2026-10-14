@@ -1,0 +1,15 @@
+[submodule "packages/session/session-manager"]
+	path = packages/session/session-manager
+	url = git@github.com:Jabberwocky238/dsh-session-manager.git
+[submodule "packages/ssh/ssh"]
+	path = packages/ssh/ssh
+	url = git@github.com:Jabberwocky238/dsh-ssh.git
+[submodule "packages/interaction/wecom"]
+	path = packages/interaction/wecom
+	url = git@github.com:Jabberwocky238/dsh-wecom.git
+[submodule "packages/interaction/tool-wecom"]
+	path = packages/interaction/tool-wecom
+	url = git@github.com:Jabberwocky238/dsh-tool-wecom.git
+[submodule "packages/interaction/tool-talk"]
+	path = packages/interaction/tool-talk
+	url = git@github.com:Jabberwocky238/dsh-tool-talk.git
